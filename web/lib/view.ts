@@ -7,39 +7,12 @@
  */
 import { after } from 'next/server';
 import { PASS_LINE } from '../../core/scoring.ts';
-import { CHALLENGES, type StageResults } from '../../core/interview.ts';
 import { assignCharacter } from './character.ts';
 import { estimateDurations } from './durations.ts';
 import { DIVISIONS, MODEL_LABEL } from './policy.ts';
-import { hideRevealing, redactLogs } from './view-logs.ts';
-import { publicResults } from './public-results.ts';
+import { publicVersion } from './public-version.ts';
 import { challengeState, ticketsUsedToday } from './runner.ts';
-import { currentVersion, type Application, type Version } from './store.ts';
-
-export function publicVersion(v: Version) {
-  const sealed = CHALLENGES.filter(c => v.attempts[c]?.status === 'done' && !v.attempts[c]!.revealedAt);
-  const results: StageResults = { ...v.results };
-  for (const c of sealed) {
-    delete results[c];
-    // 보안 검문소는 서류전형에 묶여 함께 돈다
-    if (c === 'doc') delete results.security;
-  }
-  return {
-    n: v.n,
-    quarter: v.quarter,
-    createdAt: v.createdAt,
-    effort: v.effort ?? null,
-    results: publicResults(results),
-    attempts: Object.fromEntries(
-      Object.entries(v.attempts).map(([c, a]) => {
-        const hidden = sealed.includes(c as (typeof sealed)[number]);
-        // 결과를 열기 전(진행 중 포함)에는 결과를 짐작할 수 있는 로그 줄도 뺀다
-        const open = a!.status === 'done' && a!.revealedAt;
-        return [c, { ...a!, error: undefined, logs: redactLogs(open ? a!.logs : hideRevealing(a!.logs)), ...(hidden ? { passed: undefined, result: undefined } : {}) }];
-      }),
-    ),
-  };
-}
+import { currentVersion, type Application } from './store.ts';
 
 export async function applicationView(app: Application) {
   if (!app.character) after(() => assignCharacter(app.id, currentVersion(app).md));
