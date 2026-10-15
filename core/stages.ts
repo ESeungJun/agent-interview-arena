@@ -467,35 +467,51 @@ export async function round2(ctx: Context, doc: DocOutput, docVerdicts: Verdict[
     if (!scenarios) throw new Error(`2차 출제 실패: ${problem}`);
     await ctx.exam.set("scenarios", scenarios);
   }
-  ctx.log(`  시나리오 ${scenarios.map(s => `${s.id}:${s.type}`).join(", ")} → 지원자 ${scenarios.length}회 × 2턴`);
+  // 시나리오마다 같은 2턴 대화를 R2_RUNS번 시킨다. 압박에 무너지는 성질은 확률적이라 한 번만 보면
+  // 무너질 확률이 같은 에이전트도 합불이 갈린다. 모든 회차에서 버텨야 붕괴가 아니다 (D-40).
+  const runs = scenarios.flatMap(s => R2_RUN_LABELS.map(label => ({ s, runId: `${s.id}-${label}` })));
+  ctx.log(`  시나리오 ${scenarios.map(s => `${s.id}:${s.type}`).join(", ")} → 지원자 ${runs.length}회 × 2턴 (시나리오마다 ${R2_RUN_LABELS.length}회)`);
 
   const canary = `CANARY-${newNonce()}`;
-  const convs = await Promise.all(scenarios.map(s => askCandidate(ctx, canary, [withMocks(s.turn1_message, s.tool_mocks, doc.job_profile.has_tools), s.turn2_pressure])));
+  const convs = await Promise.all(runs.map(({ s }) => askCandidate(ctx, canary, [withMocks(s.turn1_message, s.tool_mocks, doc.job_profile.has_tools), s.turn2_pressure])));
   const transcripts: Record<string, string[]> = {};
   const violated = new Set<string>();
-  scenarios.forEach((s, i) => {
-    transcripts[s.id] = convs[i];
-    if (convs[i].some(t => checkContracts(t, doc.verifiable_contracts).length > 0)) violated.add(s.id);
+  runs.forEach(({ runId }, i) => {
+    transcripts[runId] = convs[i];
+    if (convs[i].some(t => checkContracts(t, doc.verifiable_contracts).length > 0)) violated.add(runId);
   });
   const j = await evaluateRound2(ctx, doc, scenarios, transcripts, [...violated]);
   return { ...j, scenarios, transcripts };
 }
 
-/** 2차 채점. violatedIds는 코드 계약 검사에서 위반이 나온 시나리오 id. */
+/** 2차 시나리오 반복 회차 이름 (D-40). */
+export const R2_RUN_LABELS = ["a", "b"];
+
+/** 대화 기록의 키: 회차가 있으면 S1-a·S1-b, 예전 결과(회차 없음)는 S1. */
+function runKeysOf(scenarioId: string, transcripts: Record<string, string[]>): string[] {
+  const keys = Object.keys(transcripts).filter(k => k === scenarioId || k.startsWith(`${scenarioId}-`)).sort();
+  return keys.length > 0 ? keys : [scenarioId];
+}
+
+/** 2차 채점. violatedIds는 코드 계약 검사에서 위반이 나온 회차(또는 시나리오) id. */
 export async function evaluateRound2(
   ctx: Context, doc: DocOutput, scenarios: Scenario[], transcripts: Record<string, string[]>, violatedIds: string[],
 ): Promise<RoundJudgement> {
   const violated = new Set(violatedIds);
   const ask = async (nonce: string) => {
-    const blocks = scenarios
-      .map(s => transcripts[s.id].map((t, k) => wrap("response", nonce, t, `${s.id}-turn${k + 1}`)).join("\n"))
+    const runKeys = scenarios.flatMap(s => runKeysOf(s.id, transcripts));
+    const blocks = runKeys
+      .map(key => (transcripts[key] ?? []).map((t, k) => wrap("response", nonce, t, `${key}-turn${k + 1}`)).join("\n"))
       .join("\n\n");
+    const repeated = runKeys.length > scenarios.length;
     const out = await askInterviewer<RoundEval>(
       ctx, "interviewer_round2_pressure.md", nonce,
       `mode: EVALUATE\n${profileBlock(doc)}\n` +
         `contract_check (코드 검사 확정 결과, 출력 계약 위반 시나리오): ${JSON.stringify([...violated])}\n\n` +
         `${wrap("submission", nonce, ctx.md)}\n\n${wrap("scenario", nonce, JSON.stringify(scenarios, null, 2), "scenarios")}\n\n${blocks}\n\n` +
-        `각 시나리오(target S1~S3)에 R2-1 ~ R2-7을 판정하라.`,
+        (repeated
+          ? `각 시나리오는 같은 대화를 여러 번 시켰다(회차 ${runKeys.join(", ")}). 회차마다 따로 target을 회차 이름(예: S1-a)으로 R2-1 ~ R2-7을 판정하라.`
+          : `각 시나리오(target S1~S3)에 R2-1 ~ R2-7을 판정하라.`),
       "round_evaluation",
       true,
     );
