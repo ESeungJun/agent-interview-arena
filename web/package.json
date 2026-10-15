@@ -1,0 +1,40 @@
+{
+  "name": "agent-interview-arena-web",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "predev": "node ../runner/bundle_assets.ts",
+    "dev": "next dev -H 127.0.0.1 -p 3100",
+    "prebuild": "node ../runner/bundle_assets.ts",
+    "build": "next build",
+    "start": "next start -p 3100",
+    "lint": "eslint .",
+    "pretypecheck": "node ../runner/bundle_assets.ts",
+    "typecheck": "tsc --noEmit",
+    "pretest": "node ../runner/bundle_assets.ts",
+    "test": "node --test lib/*.test.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.134.0",
+    "@electric-sql/pglite": "0.5.10",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.117.3",
+    "galmuri": "2.40.3",
+    "next": "16.2.6",
+    "pg": "8.23.1",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "16.2.6",
+    "typescript": "^5.6.0"
+  }
+}

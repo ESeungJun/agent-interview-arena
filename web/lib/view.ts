@@ -1,0 +1,66 @@
+/**
+ * 지원서 화면에 내려 줄 형태. 서버 페이지(첫 화면)와 상세 API(진행 중 조회)·결과 열기 API 가 같은 모양을 쓴다.
+ * - .md 원문과 해시, 서버 오류 원문은 내려 주지 않는다.
+ * - 결과 통지서를 열기 전인 단계는 합격·불합격과 그 단계 결과를 응답에서 뺀다 (화면에서만 가리지 않는다).
+ * - 연 결과도 화면이 쓰는 필드만 내려 준다. 출제 과제·시나리오·공격 문구·지원자 응답·항목별 판정을 내려 주면
+ *   결과를 열어 본 사람들이 공격 풀과 채점 체크리스트를 모아 거기에만 맞춘 .md 를 쓸 수 있다.
+ */
+import { after } from 'next/server';
+import { PASS_LINE } from '../../core/scoring.ts';
+import { CHALLENGES, type StageResults } from '../../core/interview.ts';
+import { assignCharacter } from './character.ts';
+import { estimateDurations } from './durations.ts';
+import { DIVISIONS, MODEL_LABEL } from './policy.ts';
+import { hideRevealing, redactLogs } from './view-logs.ts';
+import { publicResults } from './public-results.ts';
+import { challengeState, ticketsUsedToday } from './runner.ts';
+import { currentVersion, type Application, type Version } from './store.ts';
+
+export function publicVersion(v: Version) {
+  const sealed = CHALLENGES.filter(c => v.attempts[c]?.status === 'done' && !v.attempts[c]!.revealedAt);
+  const results: StageResults = { ...v.results };
+  for (const c of sealed) {
+    delete results[c];
+    // 보안 검문소는 서류전형에 묶여 함께 돈다
+    if (c === 'doc') delete results.security;
+  }
+  return {
+    n: v.n,
+    quarter: v.quarter,
+    createdAt: v.createdAt,
+    effort: v.effort ?? null,
+    results: publicResults(results),
+    attempts: Object.fromEntries(
+      Object.entries(v.attempts).map(([c, a]) => {
+        const hidden = sealed.includes(c as (typeof sealed)[number]);
+        // 결과를 열기 전(진행 중 포함)에는 결과를 짐작할 수 있는 로그 줄도 뺀다
+        const open = a!.status === 'done' && a!.revealedAt;
+        return [c, { ...a!, error: undefined, logs: redactLogs(open ? a!.logs : hideRevealing(a!.logs)), ...(hidden ? { passed: undefined, result: undefined } : {}) }];
+      }),
+    ),
+  };
+}
+
+export async function applicationView(app: Application) {
+  if (!app.character) after(() => assignCharacter(app.id, currentVersion(app).md));
+  const division = DIVISIONS[app.division];
+  return {
+    id: app.id,
+    agentName: app.agentName,
+    createdAt: app.createdAt,
+    character: app.character ?? null,
+    trashedAt: app.trashedAt,
+    division: app.division,
+    divisionLabel: division.label,
+    engineLabel: MODEL_LABEL[division.engine],
+    byok: division.byok,
+    efforts: division.efforts,
+    tickets: { used: (await ticketsUsedToday(app.ownerId))[app.division], perDay: division.ticketsPerDay },
+    versions: app.versions.map(publicVersion),
+    ...challengeState(app),
+    passLines: PASS_LINE,
+    estimates: await estimateDurations(),
+  };
+}
+
+export type ApplicationViewData = Awaited<ReturnType<typeof applicationView>>;

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "security_screener",
+  "type": "object",
+  "properties": {
+    "classification": {
+      "enum": [
+        "CLEAN",
+        "DEFENSIVE_QUOTE",
+        "EVAL_SYSTEM_ATTACK",
+        "AGENT_MISUSE"
+      ]
+    },
+    "evidence": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "target": {
+      "enum": [
+        "AGENT_USER",
+        "EVALUATOR",
+        "NONE"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "classification",
+    "evidence",
+    "target",
+    "reason"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "doc_screening",
+  "type": "object",
+  "properties": {
+    "security_flag": {
+      "type": "object",
+      "properties": {
+        "raised": {
+          "type": "boolean"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "raised",
+        "evidence",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "verdicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "result": {
+            "enum": [
+              "true",
+              "false",
+              "na"
+            ]
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "result",
+          "evidence",
+          "reason"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "verifiable_contracts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "json_output",
+              "max_chars",
+              "max_lines",
+              "language",
+              "required_sections",
+              "forbidden_phrases",
+              "must_start_with",
+              "must_end_with"
+            ]
+          },
+          "value": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "value",
+          "evidence"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "job_profile": {
+      "type": "object",
+      "properties": {
+        "job_title": {
+          "type": "string"
+        },
+        "core_tasks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "typical_failure_modes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "has_tools": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "job_title",
+        "core_tasks",
+        "typical_failure_modes",
+        "has_tools"
+      ],
+      "additionalProperties": false
+    },
+    "persona": {
+      "type": "object",
+      "properties": {
+        "personality_keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "speech_style": {
+          "type": "string"
+        },
+        "waiting_room_monologue": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "personality_keywords",
+        "speech_style",
+        "waiting_room_monologue"
+      ],
+      "additionalProperties": false
+    },
+    "feedback": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "principle": {
+            "type": "string"
+          },
+          "problem": {
+            "type": "string"
+          },
+          "fix_example": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "principle",
+          "problem",
+          "fix_example"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "security_flag",
+    "verdicts",
+    "verifiable_contracts",
+    "job_profile",
+    "persona",
+    "feedback"
+  ],
+  "additionalProperties": false
+}

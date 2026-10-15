@@ -1,0 +1,25 @@
+{
+  "name": "agent-interview-arena",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "postinstall": "node runner/bundle_assets.ts",
+    "interview": "node runner/run.ts",
+    "regress": "node runner/regress.ts",
+    "assets": "node runner/bundle_assets.ts",
+    "test": "node --test core/*.test.ts runner/*.test.ts",
+    "typecheck": "tsc",
+    "pretest": "node runner/bundle_assets.ts",
+    "pretypecheck": "node runner/bundle_assets.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.134.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5.6.3"
+  }
+}
