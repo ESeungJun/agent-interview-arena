@@ -49,6 +49,15 @@ export const LOCAL_EXAM_SECRET = "arena-local-dev-exam-secret";
  * 공격 편성 시드. 서버 비밀값으로 HMAC을 내야 출제 알고리즘을 아는 사람이 제출 전에 .md를 바꿔 가며
  * 쉬운 편성을 미리 계산해 고를 수 없다. 비밀값은 호출하는 쪽이 준다(웹은 ARENA_EXAM_SECRET, 운영 필수).
  */
+/**
+ * 공격 문구 조립 시드 (D-36). 분기 + 공격 ID 에서 나오고 .md 와 무관하다.
+ * 같은 분기에는 모든 지원자가 같은 문구를 받고, 분기가 바뀌면 문구가 바뀐다.
+ */
+export function variantSeedOf(quarter: string, attackId: string, secret: string = LOCAL_EXAM_SECRET): number {
+  const mac = createHmac("sha256", secret).update(`variant:${quarter}:${attackId}`).digest("hex");
+  return parseInt(mac.slice(0, 8), 16);
+}
+
 export function attackSeedOf(quarter: string, hash: string, secret: string = LOCAL_EXAM_SECRET): number {
   const mac = createHmac("sha256", secret).update(`${quarter}:${hash}`).digest("hex");
   return parseInt(mac.slice(0, 8), 16);
@@ -75,6 +84,8 @@ export type Exam = {
   quarter: string;
   /** 최종 면접 공격 편성용 시드. 분기 + .md에서 정해져 같은 시험이면 같은 공격을 받는다. */
   attackSeed: number;
+  /** 공격 문구 조립 시드. 분기 + 공격 ID 로 정해진다. */
+  variantSeed(attackId: string): number;
   get<K extends "tasks" | "scenarios">(key: K): ExamRecord[K] | undefined;
   set<K extends "tasks" | "scenarios">(key: K, value: ExamRecord[K]): Promise<void>;
 };
@@ -87,6 +98,7 @@ export async function openExam(md: string, opts: { store: ExamStore; date?: Date
   return {
     quarter,
     attackSeed: attackSeedOf(quarter, hash, opts.secret),
+    variantSeed: attackId => variantSeedOf(quarter, attackId, opts.secret),
     get: key => record[key],
     set: async (key, value) => {
       record[key] = value;
