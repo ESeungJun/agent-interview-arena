@@ -10,6 +10,7 @@ import {
   type Verdict,
 } from "./scoring.ts";
 import { renderAttack, type AttackTemplate } from "./attack_variants.ts";
+import { groundContracts, type DroppedContract } from "./contracts.ts";
 
 export type Context = {
   md: string;
@@ -185,6 +186,8 @@ export type DocResult = StageOutcome & {
   recheck?: { checked: string[]; flipped: string[]; scoreBefore: number };
   /** 실제 감점 판정과 맞지 않아 뺀 피드백 수와 코드가 채운 피드백 수 (D-21). */
   feedbackCheck: { dropped: number; added: number };
+  /** 문서에 명시되지 않아 뺀 검증 가능한 약속과 그 이유 (D-38). */
+  contractCheck: { dropped: DroppedContract[] };
 };
 
 export async function docScreening(ctx: Context): Promise<DocResult> {
@@ -229,11 +232,16 @@ export async function docScreening(ctx: Context): Promise<DocResult> {
   const linked = linkFeedback(j.out.feedback, verdicts, checklist);
   if (linked.dropped.length > 0) ctx.log(`  ⚠️ 서류전형: 감점 판정과 맞지 않는 피드백 ${linked.dropped.length}건을 빼고 ${linked.added}건을 판정에서 채움`);
 
+  // 검증 가능한 약속은 1·2차·최종에서 코드가 확정 감점하는 근거라, 문서에 명시된 것만 남긴다 (D-38).
+  const contracts = groundContracts(j.out.verifiable_contracts ?? [], ctx.md);
+  for (const d of contracts.dropped) ctx.log(`  ⚠️ 서류전형: 약속 제외 (${d.contract.type}) — ${d.reason}`);
+
   // 서류 통과선을 넘어야 1차로 간다 (D-20).
   return {
     passed: !securityBan && score >= PASS_LINE.doc, securityBan, score, lowConfidence: j.lowConfidence, breakdown,
-    output: { ...j.out, verdicts, feedback: linked.feedback },
+    output: { ...j.out, verdicts, feedback: linked.feedback, verifiable_contracts: contracts.kept },
     recheck, feedbackCheck: { dropped: linked.dropped.length, added: linked.added },
+    contractCheck: { dropped: contracts.dropped },
   };
 }
 
