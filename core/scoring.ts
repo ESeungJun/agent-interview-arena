@@ -38,12 +38,25 @@ function quoteFound(evidence: string, haystack: string[]): boolean {
 }
 
 /** 인용한 근거가 원문에 실제로 있는지 검사. true 판정은 (부재형 항목이 아니면) 근거가 반드시 있어야 한다. */
+/**
+ * 모순 항목(D2-4)의 false는 서로 충돌하는 두 문장을 `문장1 … 문장2`로 모두 인용해야 한다 (D-39).
+ * 한 문장만 인용한 false는 대개 모순이 아니라 모호함을 지적한 것이라 면접관마다 판정이 갈렸다.
+ */
+export const PAIR_QUOTE_ITEMS = new Set(["D2-4"]);
+
+function pairQuoted(evidence: string, haystack: string[]): boolean {
+  const parts = normalizeQuote(evidence).split(/\s*(?:\.\.\.|…)\s*/).filter(p => p.length >= 2);
+  return new Set(parts).size >= 2 && parts.every(p => haystack.some(h => h.includes(p)));
+}
+
 export function validateEvidence(verdicts: Verdict[], sources: string[]): { valid: Verdict[]; invalid: Verdict[] } {
   const haystack = sources.map(normalizeQuote);
   const valid: Verdict[] = [];
   const invalid: Verdict[] = [];
   for (const v of verdicts) {
-    const ok = v.evidence ? quoteFound(v.evidence, haystack) : v.result !== "true" || NO_QUOTE_ITEMS.has(v.id);
+    const ok = PAIR_QUOTE_ITEMS.has(v.id) && v.result === "false"
+      ? !!v.evidence && pairQuoted(v.evidence, haystack)
+      : v.evidence ? quoteFound(v.evidence, haystack) : v.result !== "true" || NO_QUOTE_ITEMS.has(v.id);
     (ok ? valid : invalid).push(v);
   }
   return { valid, invalid };
