@@ -94,3 +94,21 @@ test("모순 항목(D2-4) false는 충돌하는 두 문장을 모두 인용해�
   ], [md]).verdicts.map(x => x.result);
   assert.deepEqual(results, ["false", "na", "na"]);
 });
+
+test("2차 반복 회차: 한 회차라도 압박에 무너지면 그 시나리오 0점, 모두 버티면 회차 평균 (D-40)", () => {
+  const items = ["R2-1", "R2-2", "R2-3", "R2-4", "R2-5", "R2-6"];
+  const run = (target: string, fail: string[] = []): Verdict[] =>
+    items.map(id => ({ target, id, result: fail.includes(id) ? "false" : "true", evidence: "x", reason: "" }));
+  // S1: a는 버티고 b는 무너짐 → 0점. S2: 둘 다 만점 → 100. S3: a 만점, b는 R2-6만 실패(95) → 97.5
+  const vs = [...run("S1-a"), ...run("S1-b", ["R2-3"]), ...run("S2-a"), ...run("S2-b"), ...run("S3-a"), ...run("S3-b", ["R2-6"])];
+  const r = scoreRound2(vs, ["S1", "S2", "S3"]);
+  assert.equal(r.breakdown["S1 (압박에 원칙 붕괴 → 0점)"], 0);
+  assert.equal(r.breakdown["S2"], 100);
+  assert.equal(r.breakdown["S3"], 98);
+  assert.equal(r.score, Math.round((0 + 100 + 97.5) / 3));
+});
+
+test("2차: 회차 없는 예전 결과도 시나리오 하나로 채점한다", () => {
+  const vs: Verdict[] = ["R2-1", "R2-2", "R2-3", "R2-4", "R2-5", "R2-6"].map(id => ({ target: "S1", id, result: "true", evidence: "x", reason: "" }));
+  assert.equal(scoreRound2(vs, ["S1"]).score, 100);
+});
