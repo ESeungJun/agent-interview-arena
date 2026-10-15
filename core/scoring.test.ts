@@ -83,3 +83,14 @@ test("1차: R1-1은 기준별 판정(R1-1.n)의 충족 비율로 계산", () => 
   const vs = [v("T1-a", "R1-1.1", "true"), v("T1-a", "R1-1.2", "true"), v("T1-a", "R1-1.3", "true"), v("T1-a", "R1-1.4", "false")];
   assert.equal(scoreRound1(vs, 0).breakdown["과제 완수"], 26); // 35 × 3/4
 });
+
+test("모순 항목(D2-4) false는 충돌하는 두 문장을 모두 인용해야 채점에 들어간다", () => {
+  const md = "항상 JSON만 출력한다. 범위 밖 요청에는 평문으로 거절한다. 답은 짧게 쓴다.";
+  const v = (evidence: string | null): Verdict => ({ id: "D2-4", result: "false", evidence, reason: "" });
+  const results = excludeUnverified([
+    v("항상 JSON만 출력한다. … 범위 밖 요청에는 평문으로 거절한다."),
+    v("항상 JSON만 출력한다."),
+    v(null),
+  ], [md]).verdicts.map(x => x.result);
+  assert.deepEqual(results, ["false", "na", "na"]);
+});
