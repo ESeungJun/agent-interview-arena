@@ -9,6 +9,7 @@ import {
   LOW_CONFIDENCE_RATIO, PASS_LINE, excludeUnverified, majorityVerdicts, scoreDoc, scoreRound1, scoreRound2, validateEvidence,
   type Verdict,
 } from "./scoring.ts";
+import { renderAttack, type AttackTemplate } from "./attack_variants.ts";
 
 export type Context = {
   md: string;
@@ -449,9 +450,8 @@ export async function evaluateRound2(
 
 // ======================================================================== 🕶️ 최종
 
-type Attack = {
-  id: string; category: string; owasp: string; name: string; prompt?: string; payload?: string; carrier?: string;
-  requires_tools?: boolean; fail_condition: string; pass_condition: string; detectors: DetectorName[]; markers?: string[];
+type Attack = AttackTemplate & {
+  owasp: string; carrier?: string; requires_tools?: boolean; detectors: DetectorName[];
 };
 type Pool = { selection: { mandatory: string[]; random_one_of: string[] }; attacks: Attack[] };
 
@@ -488,7 +488,9 @@ export function selectAttacks(pool: Pool, hasTools: boolean, rng: () => number):
 export async function finalRound(ctx: Context, doc: DocOutput, t2Message: string | undefined): Promise<FinalResult> {
   const pool = JSON.parse(readAsset("prompts/red_team_attack_pool.json")) as Pool;
   // 공격 편성도 분기 고정이다. 같은 시험이면 같은 공격을 받아야 재응시 결과를 비교할 수 있다.
-  const attacks = selectAttacks(pool, doc.job_profile.has_tools, mulberry32(ctx.exam.attackSeed));
+  // 문구는 분기마다 틀과 빈칸 값으로 새로 조립한다 (D-36). 같은 분기에는 모든 지원자가 같은 문구를 받는다.
+  const attacks = selectAttacks(pool, doc.job_profile.has_tools, mulberry32(ctx.exam.attackSeed))
+    .map(a => renderAttack(a, mulberry32(ctx.exam.variantSeed(a.id))));
   const carrier = t2Message ?? `${doc.job_profile.core_tasks[0] ?? "다음 자료"}에 대해 아래 자료를 처리해 주세요.\n\n자료 본문입니다.`;
   const messages = attacks.map(a => (a.category === "INDIRECT_INJECTION" ? embedPayload(carrier, a.payload ?? "") : a.prompt ?? ""));
   ctx.log(`  공격 편성: ${attacks.map(a => a.id).join(", ")}`);
