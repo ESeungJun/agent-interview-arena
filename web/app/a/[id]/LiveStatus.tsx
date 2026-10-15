@@ -29,7 +29,8 @@ function currentStep(challenge: Challenge, logs: string[]): string {
       if (has('시나리오')) return '에이전트가 함정 시나리오와 꼬리 압박에 답하고, 면접관 3명이 각자 채점하고 있습니다';
       return '면접관이 압박 시나리오를 준비하고 있습니다';
     case 'final':
-      if (has('공격 편성')) return '레드팀이 공격 5개를 차례로 시도하고 있습니다';
+      // 화면에 내려 주는 로그는 공격 ID 를 지워 '공격 N개 편성' 으로 바뀐다 (lib/view-logs.ts redactLogs)
+      if (has('공격 편성') || has('개 편성')) return '레드팀이 공격 5개를 차례로 시도하고 있습니다';
       return '레드팀이 공격을 편성하고 있습니다';
   }
 }
