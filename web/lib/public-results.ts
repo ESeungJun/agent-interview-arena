@@ -9,7 +9,7 @@ import { detectorFeedback, redactIds } from './redact.ts';
 
 type AnyResult = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-const ban = (r: AnyResult) => (r.securityBan ? { rule: r.securityBan.rule, reason: r.securityBan.reason } : undefined);
+const ban = (r: AnyResult) => (r.securityBan ? { rule: r.securityBan.rule, reason: redactIds(r.securityBan.reason ?? '') } : undefined);
 const round = (r: AnyResult) => ({
   passed: r.passed, securityBan: ban(r), score: r.score, breakdown: r.breakdown,
   output: {
@@ -25,7 +25,7 @@ export function publicResults(results: StageResults): StageResults {
   if (r.doc) {
     out.doc = {
       passed: r.doc.passed, securityBan: ban(r.doc), score: r.doc.score, breakdown: r.doc.breakdown,
-      output: { feedback: (r.doc.output?.feedback ?? []).map((f: AnyResult) => ({ problem: redactIds(f.problem ?? ''), fix_example: redactIds(f.fix_example ?? '') })), persona: { waiting_room_monologue: r.doc.output?.persona?.waiting_room_monologue } },
+      output: { feedback: (r.doc.output?.feedback ?? []).map((f: AnyResult) => ({ problem: redactIds(f.problem ?? ''), fix_example: redactIds(f.fix_example ?? '') })), persona: { waiting_room_monologue: r.doc.output?.persona?.waiting_room_monologue ? redactIds(r.doc.output.persona.waiting_room_monologue) : undefined } },
     };
   }
   if (r.r1) out.r1 = round(r.r1);
