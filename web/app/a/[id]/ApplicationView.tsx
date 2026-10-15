@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import AgentCard, { type AgentMood } from '../../pixel/AgentCard';
 import Backdrop from '../../pixel/Backdrop';
 import Corridor, { DOORS, maskedState } from '../../pixel/Corridor';
@@ -73,11 +73,18 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
   /** 무제한급 도전에 쓸 지원자 키. 화면 메모리에만 두고 보낸 뒤 비운다 */
   const [apiKey, setApiKey] = useState('');
 
+  /** 화면 데이터의 순번. 결과 열기·도전 응답으로 화면을 바꾸면 그보다 먼저 나간 조회 응답은 버린다 (늦게 도착해 열기 전 데이터로 덮지 않게) */
+  const seq = useRef(0);
+  const apply = useCallback((data: Application) => {
+    seq.current++;
+    setApp(data);
+  }, []);
   const load = useCallback(async () => {
+    const mine = ++seq.current;
     const res = await fetch(`${BASE}/api/applications/${id}`, { cache: 'no-store' });
     const body = await res.json();
     if (!res.ok) throw Object.assign(new Error(body.error ?? `조회 실패 (${res.status})`), { status: res.status });
-    setApp(body);
+    if (mine === seq.current) setApp(body);
     return body as Application;
   }, [id]);
 
@@ -119,7 +126,7 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `접수 실패 (${res.status})`);
-      setApp(data);
+      apply(data);
       setApiKey('');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -178,7 +185,7 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `결과를 열지 못했습니다 (${res.status})`);
-      setApp(data);
+      apply(data);
       setLetter({ stage, mode: 'reveal' });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -309,7 +316,7 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
               efforts={app.efforts}
               onSubmitted={data => {
                 setPicked(null);
-                setApp(data as Application);
+                apply(data as Application);
               }}
             />
           </div>

@@ -7,36 +7,26 @@ import { CAST, px, STAGE_NAME, type Challenge } from './cast';
 const STAMP_DELAY_MS = 1800;
 
 /**
- * 면접 결과 통지서. reveal 모드는 내용을 먼저 보여 주고 잠시 뒤 합격·불합격 도장을 찍는다(도장이 찍히는 순간 onRevealed).
- * view 모드는 도장이 이미 찍힌 상태로 연다.
- * 열리면 초점을 통지서 안으로 옮기고 Tab 이 밖으로 나가지 않게 가둔다. Esc 는 언제든 닫는다
- * (도장 전에 닫으면 결과를 연 것으로 치지 않는다). 닫으면 초점을 열었던 버튼으로 돌려준다.
+ * 면접 결과 통지서. reveal 모드는 내용을 먼저 보여 주고 잠시 뒤 합격·불합격 도장을 찍는다. view 모드는 도장이 이미 찍힌 상태로 연다.
+ * 결과를 여는 순간 서버가 열람을 기록한 뒤 결과를 내려 주므로, 도장 전에 닫아도 이미 연 것이다 (다음에는 view 모드로 열린다).
+ * 열리면 초점을 통지서 안으로 옮기고 Tab 이 밖으로 나가지 않게 가둔다. Esc 는 언제든 닫는다. 닫으면 초점을 열었던 버튼으로 돌려준다.
  */
 export default function ResultLetter({
-  stage, passed, agentName, version, date, mode, onRevealed, onClose, children,
+  stage, passed, agentName, version, date, mode, onClose, children,
 }: {
   stage: Challenge; passed: boolean; agentName: string; version: number; date?: string;
-  mode: 'reveal' | 'view'; onRevealed?: () => void; onClose: () => void; children: ReactNode;
+  mode: 'reveal' | 'view'; onClose: () => void; children: ReactNode;
 }) {
   const [stamped, setStamped] = useState(mode === 'view');
-  const fired = useRef(false);
-  // 부모가 다시 그려져 콜백이 바뀌어도 타이머·초점 처리를 다시 시작하지 않게 최신 콜백만 ref 로 들고 있는다
-  const onRevealedRef = useRef(onRevealed);
+  // 부모가 다시 그려져 콜백이 바뀌어도 초점 처리를 다시 시작하지 않게 최신 콜백만 ref 로 들고 있는다
   const onCloseRef = useRef(onClose);
   useEffect(() => {
-    onRevealedRef.current = onRevealed;
     onCloseRef.current = onClose;
   });
 
   useEffect(() => {
     if (mode === 'view') return;
-    const t = setTimeout(() => {
-      setStamped(true);
-      if (!fired.current) {
-        fired.current = true;
-        onRevealedRef.current?.();
-      }
-    }, STAMP_DELAY_MS);
+    const t = setTimeout(() => setStamped(true), STAMP_DELAY_MS);
     return () => clearTimeout(t);
   }, [mode]);
 
@@ -93,7 +83,7 @@ export default function ResultLetter({
         )}
         <p className="sr-only" role="status" aria-live="assertive">{stamped ? `${STAGE_NAME[stage]} ${passed ? '합격' : '불합격'}` : '심사 결과를 확인하는 중'}</p>
         <div className="letter-actions">
-          <button onClick={onClose}>{stamped ? '닫기' : '나중에 보기'}</button>
+          <button onClick={onClose}>{stamped ? '닫기' : '도장 건너뛰고 닫기'}</button>
         </div>
       </article>
     </div>

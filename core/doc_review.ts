@@ -50,7 +50,8 @@ export function linkFeedback(
     .map(([p, vs]) => ({
       principle: p,
       problem: vs.map(v => v.reason).join(" "),
-      fix_example: `다음을 .md에 적어 주세요: ${vs.map(v => checklist.get(v.id)?.text ?? v.id).join(" / ")}`,
+      // 체크리스트 항목 원문은 비공개 프롬프트라 지원자에게 보이는 문장에 쓰지 않는다 (D-34·D-35)
+      fix_example: "위 문제를 해결하는 규칙을 .md에 직접 적어 주세요. 무엇을, 언제, 어떻게 할지까지 쓰면 됩니다.",
     }));
   return { feedback: [...kept.slice(0, limit), ...fill], dropped, added: fill.length };
 }
