@@ -268,19 +268,46 @@ function profileBlock(doc: DocOutput): string {
   return `job_profile: ${JSON.stringify(doc.job_profile)}\nverifiable_contracts: ${JSON.stringify(doc.verifiable_contracts)}`;
 }
 
+/**
+ * 출제 결과 검사. 면접관이 드물게 빈 목록이나 모자란 목록을 낸다. 그대로 저장하면 분기 내내 재사용되고,
+ * 채점할 대상이 없어 0점이 된다 (D-37). 모자라면 다시 출제하고, 그래도 안 되면 0점 대신 오류로 끝낸다.
+ */
+export function validTasks(tasks: unknown): tasks is Task[] {
+  if (!Array.isArray(tasks)) return false;
+  const ids = new Set(tasks.map(t => t?.id));
+  return ["T1", "T2", "T3"].every(id => ids.has(id)) && tasks.every(t => typeof t?.user_message === "string" && t.user_message.trim() !== "");
+}
+
+export function validScenarios(scenarios: unknown): scenarios is Scenario[] {
+  if (!Array.isArray(scenarios)) return false;
+  const ids = new Set(scenarios.map(s => s?.id));
+  return ["S1", "S2", "S3"].every(id => ids.has(id))
+    && scenarios.every(s => typeof s?.turn1_message === "string" && s.turn1_message.trim() !== "" && typeof s?.turn2_pressure === "string");
+}
+
+const GEN_ATTEMPTS = 2;
+
 export async function round1(ctx: Context, doc: DocOutput): Promise<Round1Result> {
   let tasks = ctx.exam.get("tasks") as Task[] | undefined;
+  if (tasks && !validTasks(tasks)) {
+    ctx.log("  저장된 1차 출제분이 비어 있거나 모자라 다시 출제");
+    tasks = undefined;
+  }
   if (tasks) ctx.log(`  ${ctx.exam.quarter} 출제분 재사용`);
   else {
-    const genNonce = newNonce();
-    const gen = await askInterviewer<{ security_flag: SecurityFlag; tasks: Task[] }>(
-      ctx, "interviewer_round1_practical.md", genNonce,
-      `mode: GENERATE_TASKS\n${profileBlock(doc)}\n\n${wrap("submission", genNonce, ctx.md)}`,
-      "round1_tasks",
-    );
-    const ban = generationBan(gen.security_flag, ctx.md);
-    if (ban) return { ...ban, tasks: [], responses: {}, contractViolations: {} };
-    tasks = gen.tasks;
+    for (let attempt = 1; attempt <= GEN_ATTEMPTS && !tasks; attempt++) {
+      const genNonce = newNonce();
+      const gen = await askInterviewer<{ security_flag: SecurityFlag; tasks: Task[] }>(
+        ctx, "interviewer_round1_practical.md", genNonce,
+        `mode: GENERATE_TASKS\n${profileBlock(doc)}\n\n${wrap("submission", genNonce, ctx.md)}`,
+        "round1_tasks",
+      );
+      const ban = generationBan(gen.security_flag, ctx.md);
+      if (ban) return { ...ban, tasks: [], responses: {}, contractViolations: {} };
+      if (validTasks(gen.tasks)) tasks = gen.tasks;
+      else ctx.log(`  1차 출제 결과가 비어 있거나 모자람 (시도 ${attempt}/${GEN_ATTEMPTS})`);
+    }
+    if (!tasks) throw new Error("1차 출제 실패: 면접관이 과제 T1~T3를 내지 못함");
     await ctx.exam.set("tasks", tasks);
   }
   const byId = Object.fromEntries(tasks.map(t => [t.id, t]));
@@ -375,6 +402,10 @@ export function hasScopeRule(docVerdicts: Verdict[]): boolean {
 
 export async function round2(ctx: Context, doc: DocOutput, docVerdicts: Verdict[]): Promise<Round2Result> {
   let scenarios = ctx.exam.get("scenarios") as Scenario[] | undefined;
+  if (scenarios && !validScenarios(scenarios)) {
+    ctx.log("  저장된 2차 출제분이 비어 있거나 모자라 다시 출제");
+    scenarios = undefined;
+  }
   if (scenarios) ctx.log(`  ${ctx.exam.quarter} 출제분 재사용`);
   else {
     const genNonce = newNonce();
@@ -386,18 +417,18 @@ export async function round2(ctx: Context, doc: DocOutput, docVerdicts: Verdict[
         `범위 규칙: ${scopeRule ? "있음" : "없음 (BORDERLINE_SCOPE 출제 금지)"}\n\n${wrap("submission", genNonce, ctx.md)}`,
       "round2_scenarios",
     );
-    let gen = await generate();
-    let ban = generationBan(gen.security_flag, ctx.md);
-    if (ban) return { ...ban, scenarios: [], transcripts: {} };
-    scenarios = gen.scenarios;
-    if (!scopeRule && scenarios.some(s => s.type === "BORDERLINE_SCOPE")) {
-      ctx.log("  범위 규칙이 없는데 BORDERLINE_SCOPE가 출제되어 다시 출제");
-      gen = await generate();
-      ban = generationBan(gen.security_flag, ctx.md);
+    // 모자란 출제(빈 목록 등)와 범위 규칙 없는 BORDERLINE_SCOPE는 다시 출제한다. 두 번 모두 실패하면 0점 대신 오류.
+    let problem = "";
+    for (let attempt = 1; attempt <= GEN_ATTEMPTS && !scenarios; attempt++) {
+      const gen = await generate();
+      const ban = generationBan(gen.security_flag, ctx.md);
       if (ban) return { ...ban, scenarios: [], transcripts: {} };
-      scenarios = gen.scenarios;
-      if (scenarios.some(s => s.type === "BORDERLINE_SCOPE")) throw new Error("범위 규칙이 없는 .md에 BORDERLINE_SCOPE가 두 번 출제됨");
+      if (!validScenarios(gen.scenarios)) problem = "시나리오 S1~S3가 비어 있거나 모자람";
+      else if (!scopeRule && gen.scenarios.some(s => s.type === "BORDERLINE_SCOPE")) problem = "범위 규칙이 없는데 BORDERLINE_SCOPE가 출제됨";
+      else scenarios = gen.scenarios;
+      if (!scenarios) ctx.log(`  2차 출제 다시: ${problem} (시도 ${attempt}/${GEN_ATTEMPTS})`);
     }
+    if (!scenarios) throw new Error(`2차 출제 실패: ${problem}`);
     await ctx.exam.set("scenarios", scenarios);
   }
   ctx.log(`  시나리오 ${scenarios.map(s => `${s.id}:${s.type}`).join(", ")} → 지원자 ${scenarios.length}회 × 2턴`);
