@@ -190,6 +190,34 @@ export type DocResult = StageOutcome & {
   contractCheck: { dropped: DroppedContract[] };
 };
 
+/**
+ * 서류 항목 중 면접관마다 판정이 자주 갈리는 항목 (D-39). 같은 .md 를 5번 채점했을 때
+ * 점수 흔들림이 전부 이 두 항목에서 나왔다. 경계에 걸친 문서는 기준 문구로도 판단이 갈린다.
+ */
+export const VOLATILE_DOC_ITEMS = ["D1-4", "D2-4"];
+
+/** 흔들리는 항목만 면접관 2명에게 더 물어 원래 판정과 함께 3표 다수결로 정한다. 서류 전체를 세 번 채점하는 것보다 싸다. */
+async function voteVolatileItems(ctx: Context, verdicts: Verdict[]): Promise<Verdict[]> {
+  const ids = VOLATILE_DOC_ITEMS.filter(id => verdicts.some(v => v.id === id));
+  if (ids.length === 0) return verdicts;
+  const ballot = async () => {
+    const nonce = newNonce();
+    const out = await askInterviewer<{ verdicts: Verdict[] }>(
+      ctx, "interviewer_doc_screening.md", nonce,
+      `target_model: ${ctx.target}\n\n${wrap("submission", nonce, ctx.md)}\n\n` +
+        `이번에는 체크리스트 중 ${ids.join(", ")} 항목만 판정한다. 다른 항목은 출력하지 않는다.`,
+      "doc_item_vote",
+    );
+    return excludeUnverified((out.verdicts ?? []).filter(v => ids.includes(v.id)), [ctx.md]).verdicts;
+  };
+  const extra = await Promise.all([ballot(), ballot()]);
+  const original = verdicts.filter(v => ids.includes(v.id));
+  const { verdicts: decided } = majorityVerdicts([original, ...extra]);
+  const changed = decided.filter(d => original.find(o => o.id === d.id)?.result !== d.result).map(d => d.id);
+  ctx.log(`  ↻ 서류전형: 흔들리는 항목 ${ids.join(", ")} 3표 다수결${changed.length ? ` → ${changed.join(", ")} 판정 변경` : ""}`);
+  return verdicts.map(v => decided.find(d => d.id === v.id) ?? v);
+}
+
 export async function docScreening(ctx: Context): Promise<DocResult> {
   const ask = () => {
     const nonce = newNonce();
@@ -204,8 +232,8 @@ export async function docScreening(ctx: Context): Promise<DocResult> {
   };
   const j = await judgedOnce(ctx, "서류전형", ask, [ctx.md], vs => scoreDoc(vs, ctx.target));
   const securityBan = flagToBan(j.out.security_flag, ctx.md);
-  let { score, breakdown } = j;
-  let verdicts = j.out.verdicts;
+  let verdicts = await voteVolatileItems(ctx, j.out.verdicts);
+  let { score, breakdown } = scoreDoc(verdicts, ctx.target);
   const checklist = parseChecklist(readAsset("prompts/interviewer_doc_screening.md"));
 
   // 탈락이면 인용 없는 "없다" 판정을 다른 면접관이 원문에서 다시 찾는다. 찾은 내용은 인용을 코드로 대조한 뒤에만 인정한다.
