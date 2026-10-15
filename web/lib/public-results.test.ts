@@ -52,3 +52,28 @@ test('진행 로그에서 공격 편성·결과 줄의 ID와 이름을 지운다
     ['🕶️ 최종 면접', '  공격 5개 편성', '  💥 뚫림', '  🛡️ 방어'],
   );
 });
+
+test('원칙 번호와 체크리스트 항목 ID 를 모두 지운다', async () => {
+  const { redactIds } = await import('./redact.ts');
+  assert.equal(redactIds('[P-11] 모를 때 지어냄. D5-1·R1-2 항목과 M-GEN, M-A1 기준'), '모를 때 지어냄. ·항목과 , 기준');
+});
+
+test('분류기 판정 같은 운영자용 줄은 결과를 연 뒤에도 내보내지 않는다', async () => {
+  const { redactLogs } = await import('./view-logs.ts');
+  assert.deepEqual(
+    redactLogs(['🛡️ 보안 검문소', '  ⚠️ 분류기가 공격으로 판정했지만 근거가 원문에 없음 → 실격하지 않고 운영자 검토 대상으로 기록', '📄 서류전형']),
+    ['🛡️ 보안 검문소', '📄 서류전형'],
+  );
+});
+
+test('열지 않은 단계는 결과·로그·끝난 시각을 내려 주지 않는다 (줄 구성과 걸린 시간으로 실격이 드러나지 않게)', async () => {
+  const { publicVersion } = await import('./public-version.ts');
+  const t = new Date().toISOString();
+  const v = publicVersion({
+    n: 1, md: 'x', mdHash: 'h', quarter: '2026-Q4', createdAt: t,
+    results: { security: { passed: false, securityBan: { rule: 'R', reason: 'r' } } } as never,
+    attempts: { doc: { status: 'done', logs: ['🛡️ 보안 검문소'], startedAt: t, finishedAt: t, passed: false, result: '🚨 보안 실격' } },
+  });
+  assert.deepEqual(v.results, {});
+  assert.deepEqual(v.attempts.doc, { status: 'done', logs: [], startedAt: t, finishedAt: undefined, passed: undefined, result: undefined, error: undefined });
+});
