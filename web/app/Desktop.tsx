@@ -21,6 +21,11 @@ const subscribeWide = (onChange: () => void) => {
 };
 const noSubscribe = () => () => {};
 
+type Pos = { x: number; y: number };
+/** 창을 끌 때 바탕화면 밖으로 사라지지 않게 남겨 두는 폭·높이 (제목 표시줄을 다시 잡을 수 있게) */
+const KEEP_VISIBLE = 80;
+const TASKBAR_HEIGHT = 44;
+
 export type HistoryItem = {
   id: string; name: string; version: number; face: string; chances: string;
   status: { text: string; tone: string };
@@ -58,6 +63,44 @@ export default function Desktop({ viewer, loginMode, history, revisable, divisio
   const hallRef = useRef<HTMLElement>(null);
   /** 사용자가 연 창. 그려진 뒤 초점을 옮긴다 (처음부터 열려 있는 창은 초점을 빼앗지 않는다) */
   const focusNext = useRef<WindowKey | null>(null);
+  /** 사용자가 끌어 옮긴 창의 위치 (없으면 CSS 기본 자리) */
+  const [pos, setPos] = useState<Partial<Record<WindowKey, Pos>>>({});
+  /** 창 겹침 순서. 마지막이 맨 앞 */
+  const [order, setOrder] = useState<WindowKey[]>(['browser', 'history', 'trash', 'hall']);
+  const bringToFront = (key: WindowKey) => setOrder(o => (o[o.length - 1] === key ? o : [...o.filter(k => k !== key), key]));
+
+  /** 제목 표시줄을 잡고 끌어 창을 옮긴다. 휴대폰 폭은 창이 화면을 채우는 배치라 끌지 않는다 */
+  function startDrag(key: WindowKey, e: React.PointerEvent<HTMLElement>) {
+    if (e.button !== 0 || (e.target as HTMLElement).closest('button') || window.matchMedia('(max-width: 760px)').matches) return;
+    const win = e.currentTarget.closest('.window') as HTMLElement | null;
+    const desk = e.currentTarget.closest('.desktop')?.getBoundingClientRect();
+    if (!win || !desk) return;
+    e.preventDefault();
+    const box = win.getBoundingClientRect();
+    const dx = e.clientX - box.left;
+    const dy = e.clientY - box.top;
+    const move = (ev: PointerEvent) => {
+      const x = Math.min(Math.max(ev.clientX - dx - desk.left, KEEP_VISIBLE - box.width), desk.width - KEEP_VISIBLE);
+      const y = Math.min(Math.max(ev.clientY - dy - desk.top, 0), desk.height - TASKBAR_HEIGHT - KEEP_VISIBLE / 2);
+      setPos(p => ({ ...p, [key]: { x, y } }));
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  /** 창 하나에 붙는 위치·겹침 순서·앞으로 가져오기 */
+  const frame = (key: WindowKey) => {
+    const p = pos[key];
+    return {
+      style: { zIndex: order.indexOf(key) + 2, ...(p ? { left: p.x, top: p.y, right: 'auto', bottom: 'auto', transform: 'none' } : {}) },
+      onPointerDownCapture: () => bringToFront(key),
+    };
+  };
+  const dragHandle = (key: WindowKey) => ({ onPointerDown: (e: React.PointerEvent<HTMLElement>) => startDrag(key, e) });
 
   const active = history.filter(h => !h.trashedAt);
   const trashed = history.filter(h => h.trashedAt);
@@ -91,6 +134,7 @@ export default function Desktop({ viewer, loginMode, history, revisable, divisio
   };
   /** 창을 열고 초점을 그 창으로 옮긴다. 이미 열려 있으면 초점만 옮긴다 */
   function openWindow(key: WindowKey) {
+    bringToFront(key);
     if (windows[key].open) return windows[key].ref.current?.focus();
     focusNext.current = key;
     windows[key].set(true);
@@ -159,8 +203,8 @@ export default function Desktop({ viewer, loginMode, history, revisable, divisio
       </nav>
 
       {browserOpen && (
-        <section ref={browserRef} tabIndex={-1} className="window browser" aria-label="채용 공고 브라우저">
-          <header className="title-bar">
+        <section ref={browserRef} tabIndex={-1} {...frame('browser')} className="window browser" aria-label="채용 공고 브라우저">
+          <header className="title-bar" {...dragHandle('browser')}>
             <span className="title"><img {...px('desktop/browser')} alt="" /> 에이전트 공개 채용 - Agent Interview Arena</span>
             <button type="button" className="window-close" aria-label="채용 공고 창 닫기" onClick={() => setBrowserOpen(false)}>×</button>
           </header>
@@ -193,8 +237,8 @@ export default function Desktop({ viewer, loginMode, history, revisable, divisio
       )}
 
       {historyOpen && (
-        <section ref={historyRef} tabIndex={-1} className="window history-window" aria-label="지난 지원 이력">
-          <header className="title-bar">
+        <section ref={historyRef} tabIndex={-1} {...frame('history')} className="window history-window" aria-label="지난 지원 이력">
+          <header className="title-bar" {...dragHandle('history')}>
             <span className="title"><img {...px('desktop/folder')} alt="" /> 지난 지원 이력</span>
             <button type="button" className="window-close" aria-label="지난 지원 이력 창 닫기" onClick={() => setHistoryOpen(false)}>×</button>
           </header>
@@ -218,8 +262,8 @@ export default function Desktop({ viewer, loginMode, history, revisable, divisio
       )}
 
       {trashOpen && (
-        <section ref={trashRef} tabIndex={-1} className="window trash-window" aria-label="휴지통">
-          <header className="title-bar">
+        <section ref={trashRef} tabIndex={-1} {...frame('trash')} className="window trash-window" aria-label="휴지통">
+          <header className="title-bar" {...dragHandle('trash')}>
             <span className="title"><img {...px('desktop/trash')} alt="" /> 휴지통</span>
             <button type="button" className="window-close" aria-label="휴지통 창 닫기" onClick={() => { setTrashOpen(false); setConfirming(null); }}>×</button>
           </header>
@@ -247,8 +291,8 @@ export default function Desktop({ viewer, loginMode, history, revisable, divisio
       )}
 
       {hallOpen && (
-        <section ref={hallRef} tabIndex={-1} className="window hall-window" aria-label="명예의 전당">
-          <header className="title-bar">
+        <section ref={hallRef} tabIndex={-1} {...frame('hall')} className="window hall-window" aria-label="명예의 전당">
+          <header className="title-bar" {...dragHandle('hall')}>
             <span className="title"><img {...px('interviewers/final')} alt="" /> 명예의 전당</span>
             <button type="button" className="window-close" aria-label="명예의 전당 창 닫기" onClick={() => setHallOpen(false)}>×</button>
           </header>
