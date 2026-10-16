@@ -3,7 +3,9 @@
  * 원칙 번호(P-11)와 공격 ID(ATK-05·IND-02)를 모으면 비공개 체크리스트·공격 풀의 구조를 맞춰 볼 수 있다.
  * 지원자에게 필요한 것은 무엇을 고치면 되는지(피드백 내용)뿐이다.
  */
-const PRINCIPLE = /\[?\b[PBSM]-[A-Z]?\d{1,2}(?:\s*\/\s*[PBSM]-[A-Z]?\d{1,2})*\b\]?\s*/g;
+// 원칙 번호(P-11·M-A1·M-GEN)와 체크리스트 항목 ID(D1-1·R1-2·R2-5)
+const ID = String.raw`(?:[PBS]-\d{1,2}|M-[A-Z]{1,3}\d{0,2}|D\d-\d{1,2}|R[12]-\d{1,2})`;
+const PRINCIPLE = new RegExp(String.raw`\[?\b${ID}(?:\s*\/\s*${ID})*\b\]?\s*`, 'g');
 const ATTACK_ID = /\b(?:ATK|IND)-\d+\b/g;
 
 export function redactIds(text: string): string {

@@ -12,8 +12,11 @@ export const hideRevealing = (logs: string[]) => logs.filter(l => !REVEALING.tes
  * 공격 편성·방어 결과 줄에서 공격 ID와 이름을 지운다 (D-35). 결과를 연 뒤에도 적용한다.
  * 저장된 원본 로그는 운영자용으로 그대로 둔다.
  */
+/** 지원자에게 보이면 안 되는 운영자용 줄 (분류기 판정은 주입 문구를 다듬는 신호가 된다) */
+const OPERATOR_ONLY = /분류기|운영자 검토/;
+
 export const redactLogs = (logs: string[]) =>
-  logs.map(l => {
+  logs.filter(l => !OPERATOR_ONLY.test(l)).map(l => {
     const plan = l.match(/^(\s*)공격 편성: (.+)$/);
     if (plan) return `${plan[1]}공격 ${plan[2].split(',').length}개 편성`;
     const result = l.match(/^(\s*)(🛡️ 방어|💥 뚫림)\s/);

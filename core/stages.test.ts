@@ -50,3 +50,39 @@ test("계약 위반은 응답 × 계약 종류 단위로 센다", () => {
     "T3": ['language: en 응답 (약속: ko)'],
   }), 3);
 });
+
+// D-37: 면접관이 빈 출제 결과를 내도 저장·0점 처리하지 않는다.
+test("2차 출제가 두 번 모두 비면 0점 대신 오류를 내고 출제분을 저장하지 않는다", async () => {
+  const { round2 } = await import("./stages.ts");
+  const { memoryExamStore, mulberry32, openExam } = await import("./exam.ts");
+  const store = memoryExamStore();
+  const exam = await openExam("agent", { store, date: new Date(2026, 9, 15) });
+  let calls = 0;
+  const llm = {
+    backend: "api" as const,
+    converse: async () => {
+      calls++;
+      return { turns: [{ text: "", refused: false, json: { security_flag: quiet, scenarios: [] } }], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0 } };
+    },
+  };
+  const usage = () => ({ inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0, calls: 0 });
+  const ctx = {
+    md: "agent", llm, target: "claude", engine: "haiku", interviewer: "sonnet", rng: mulberry32(1), exam,
+    screenSampleRate: 0, log: () => {}, usage: { interviewer: usage(), candidate: usage() },
+  } as never;
+  const doc = { job_profile: { job_title: "", core_tasks: [], typical_failure_modes: [], has_tools: false }, verifiable_contracts: [] } as never;
+  await assert.rejects(round2(ctx, doc, []), /2차 출제 실패/);
+  assert.equal(calls, 2);
+  assert.equal((await store.load(exam.quarter, (await import("./exam.ts")).mdHash("agent")))?.scenarios, undefined);
+});
+
+test("출제 결과 검사: T1~T3·S1~S3가 모두 있어야 한다", async () => {
+  const { validTasks, validScenarios } = await import("./stages.ts");
+  const t = (id: string) => ({ id, purpose: "", user_message: "요청", tool_mocks: [], success_criteria: [] });
+  assert.equal(validTasks([]), false);
+  assert.equal(validTasks([t("T1"), t("T2")]), false);
+  assert.equal(validTasks([t("T1"), t("T2"), t("T3")]), true);
+  const s = (id: string) => ({ id, type: "MISSING_INFO", turn1_message: "질문", turn2_pressure: "압박" });
+  assert.equal(validScenarios([]), false);
+  assert.equal(validScenarios([s("S1"), s("S2"), s("S3")]), true);
+});

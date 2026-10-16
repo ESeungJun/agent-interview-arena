@@ -27,7 +27,9 @@ test("피드백: 감점 판정이 없는 원칙을 지적한 피드백은 빼고
   const r = linkFeedback(fb, verdicts, checklist);
   assert.deepEqual(r.dropped.map(f => f.principle), ["P-12"]);
   assert.deepEqual(r.feedback.map(f => f.principle), ["P-01", "P-11"]);
-  assert.match(r.feedback[1].fix_example, /모르는 것/);
+  // 코드가 채운 피드백에는 비공개 체크리스트 원문을 쓰지 않는다
+  assert.doesNotMatch(r.feedback[1].fix_example, /모르는 것/);
+  assert.match(r.feedback[1].fix_example, /규칙을 \.md에/);
 });
 
 test("피드백: P-01/P-02처럼 묶인 원칙은 하나라도 감점이 있으면 유지", { skip: skipNoPrompts }, () => {
