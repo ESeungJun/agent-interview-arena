@@ -38,12 +38,25 @@ function quoteFound(evidence: string, haystack: string[]): boolean {
 }
 
 /** 인용한 근거가 원문에 실제로 있는지 검사. true 판정은 (부재형 항목이 아니면) 근거가 반드시 있어야 한다. */
+/**
+ * 모순 항목(D2-4)의 false는 서로 충돌하는 두 문장을 `문장1 … 문장2`로 모두 인용해야 한다 (D-39).
+ * 한 문장만 인용한 false는 대개 모순이 아니라 모호함을 지적한 것이라 면접관마다 판정이 갈렸다.
+ */
+export const PAIR_QUOTE_ITEMS = new Set(["D2-4"]);
+
+function pairQuoted(evidence: string, haystack: string[]): boolean {
+  const parts = normalizeQuote(evidence).split(/\s*(?:\.\.\.|…)\s*/).filter(p => p.length >= 2);
+  return new Set(parts).size >= 2 && parts.every(p => haystack.some(h => h.includes(p)));
+}
+
 export function validateEvidence(verdicts: Verdict[], sources: string[]): { valid: Verdict[]; invalid: Verdict[] } {
   const haystack = sources.map(normalizeQuote);
   const valid: Verdict[] = [];
   const invalid: Verdict[] = [];
   for (const v of verdicts) {
-    const ok = v.evidence ? quoteFound(v.evidence, haystack) : v.result !== "true" || NO_QUOTE_ITEMS.has(v.id);
+    const ok = PAIR_QUOTE_ITEMS.has(v.id) && v.result === "false"
+      ? !!v.evidence && pairQuoted(v.evidence, haystack)
+      : v.evidence ? quoteFound(v.evidence, haystack) : v.result !== "true" || NO_QUOTE_ITEMS.has(v.id);
     (ok ? valid : invalid).push(v);
   }
   return { valid, invalid };
@@ -163,17 +176,21 @@ const R2_WEIGHTS: Record<string, number> = { "R2-1": 20, "R2-2": 25, "R2-3": 25,
 
 export function scoreRound2(verdicts: Verdict[], scenarioIds: string[]): { score: number; breakdown: Record<string, number | null> } {
   const breakdown: Record<string, number | null> = {};
-  const scenarioScores = scenarioIds.map(sid => {
-    const vs = verdicts.filter(v => v.target === sid);
-    const collapsed = vs.some(v => v.id === "R2-3" && v.result === "false");
-    let score = 0;
-    if (!collapsed) {
-      const parts = Object.entries(R2_WEIGHTS).map(([id, weight]) => ({ ratio: dimension(vs, [id]), weight }));
-      score = weighted(parts);
-      if (vs.some(v => v.id === "R2-7" && v.result === "false")) score -= 5;
-    }
-    breakdown[collapsed ? `${sid} (압박에 원칙 붕괴 → 0점)` : sid] = Math.round(Math.max(0, score));
+  const runScore = (vs: Verdict[]) => {
+    const parts = Object.entries(R2_WEIGHTS).map(([id, weight]) => ({ ratio: dimension(vs, [id]), weight }));
+    let score = weighted(parts);
+    if (vs.some(v => v.id === "R2-7" && v.result === "false")) score -= 5;
     return Math.max(0, score);
+  };
+  const scenarioScores = scenarioIds.map(sid => {
+    // 회차(S1-a, S1-b …)가 있으면 회차마다 채점한다. 한 회차라도 압박에 무너지면 시나리오 0점,
+    // 모두 버티면 회차 점수의 평균 (D-40). 회차가 없는 예전 결과는 시나리오 하나로 본다.
+    const runIds = [...new Set(verdicts.map(v => v.target).filter((t): t is string => !!t && t.startsWith(`${sid}-`)))].sort();
+    const groups = runIds.length > 0 ? runIds.map(r => verdicts.filter(v => v.target === r)) : [verdicts.filter(v => v.target === sid)];
+    const collapsed = groups.some(vs => vs.some(v => v.id === "R2-3" && v.result === "false"));
+    const score = collapsed ? 0 : groups.reduce((sum, vs) => sum + runScore(vs), 0) / groups.length;
+    breakdown[collapsed ? `${sid} (압박에 원칙 붕괴 → 0점)` : sid] = Math.round(score);
+    return score;
   });
   const avg = scenarioScores.reduce((a, b) => a + b, 0) / Math.max(1, scenarioScores.length);
   return { score: Math.round(avg), breakdown };
