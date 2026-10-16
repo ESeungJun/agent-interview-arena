@@ -232,14 +232,16 @@ body:has(.desktop) { overflow: hidden; }
 .desktop-icon img { width: 56px; height: 56px; object-fit: contain; image-rendering: pixelated; }
 
 .window { position: absolute; display: flex; flex-direction: column; background: var(--window); border: 3px solid var(--black); box-shadow: inset -3px -3px 0 var(--window-edge), inset 3px 3px 0 var(--white), 10px 10px 0 rgba(0, 0, 0, .35); }
-.title-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px 4px 8px; background: linear-gradient(90deg, var(--blue-deep), var(--blue)); color: var(--white); font: 13px var(--font-pixel); }
+.title-bar { cursor: grab; touch-action: none; user-select: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px 4px 8px; background: linear-gradient(90deg, var(--blue-deep), var(--blue)); color: var(--white); font: 13px var(--font-pixel); }
 .title-bar .title { display: inline-flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .title-bar .title img { width: 18px; height: 18px; image-rendering: pixelated; }
 .window-close { min-height: 0; width: 28px; height: 24px; padding: 0; background: var(--window); color: var(--black); border: 2px solid var(--black); box-shadow: inset -2px -2px 0 var(--window-edge); font: 700 15px/1 var(--font-pixel); }
 .window-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 18px; }
 .window-body.page { background: var(--white); padding: clamp(16px, 2.4vw, 40px); }
 /* 창 높이는 내용에 맞추고, 화면보다 길 때만 창 안에서 스크롤한다 (내용이 짧은 큰 화면에서 아래가 비지 않게) */
-.browser { left: 140px; top: 18px; max-height: calc(100% - 18px - 58px); width: min(980px, calc(100vw - 140px - 32px)); }
+/* 채용 창은 화면 폭을 따라 커진다. 넓은 화면(이력 창이 함께 열리는 폭)에서는 오른쪽 이력 창 자리를 비운다 */
+.browser { left: 140px; top: 18px; max-height: calc(100% - 18px - 58px); width: min(1100px, calc(100vw - 140px - 32px)); }
+@media (min-width: 1640px) { .browser { width: min(1360px, calc(100vw - 140px - 24px - 460px - 48px)); } }
 .browser-bar { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; background: var(--window-bar); border-bottom: 2px solid var(--black); }
 .browser-bar .tab { align-self: flex-start; padding: 3px 12px; background: var(--white); border: 2px solid var(--black); border-bottom: 0; font-size: 12px; }
 .browser-bar .address { padding: 4px 10px; background: var(--white); border: 2px solid var(--black); color: #3a4677; font: 12px var(--font-mono); }
@@ -281,7 +283,7 @@ body:has(.desktop) { overflow: hidden; }
 textarea.apply-input { min-height: 180px; resize: vertical; }
 .apply-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
 
-.history-window { right: 24px; top: 70px; z-index: 2; width: min(460px, calc(100vw - 48px)); max-height: calc(100vh - 150px); }
+.history-window { right: 24px; top: 70px; width: min(460px, calc(100vw - 48px)); max-height: calc(100vh - 150px); }
 .file-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .history-item { display: grid; grid-template-columns: 48px 1fr; gap: 6px 12px; align-items: start; padding: 10px 12px; background: var(--white); color: inherit; border: 2px solid var(--black); text-decoration: none; }
 .history-item:hover { background: #eef1ff; }
@@ -296,7 +298,7 @@ textarea.apply-input { min-height: 180px; resize: vertical; }
 .status-badge.ready { color: var(--gold); }
 .status-badge.arrived { background: var(--gold); color: var(--ink); }
 
-.taskbar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; height: 44px; display: flex; align-items: center; gap: 6px; padding: 0 8px; background: var(--taskbar); border-top: 3px solid var(--white); box-shadow: 0 -2px 0 var(--black); }
+.taskbar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 20; height: 44px; display: flex; align-items: center; gap: 6px; padding: 0 8px; background: var(--taskbar); border-top: 3px solid var(--white); box-shadow: 0 -2px 0 var(--black); }
 .taskbar .start, .taskbar .clock { padding: 4px 12px; font: 13px var(--font-pixel); }
 .taskbar .start { min-height: 32px; background: var(--window); color: var(--black); border: 2px solid var(--black); box-shadow: inset -2px -2px 0 var(--window-edge); }
 .taskbar .clock { margin-left: auto; border: 2px solid var(--window-edge); }
@@ -367,7 +369,7 @@ button.secondary { background: var(--white); color: var(--ink); border: 2px soli
 .row-button.danger { background: var(--red); color: var(--white); }
 .row-button.quiet { background: none; border-color: transparent; color: var(--muted); }
 .row-button.quiet:hover, .row-button.quiet:focus-visible { color: var(--ink); border-color: var(--black); }
-.trash-window { right: 56px; top: 120px; z-index: 4; width: min(460px, calc(100vw - 48px)); max-height: calc(100vh - 200px); }
+.trash-window { right: 56px; top: 120px; width: min(460px, calc(100vw - 48px)); max-height: calc(100vh - 200px); }
 .trash-banner { margin: 0 0 12px; padding: 10px 14px; background: var(--paper); color: var(--ink); border: 3px solid var(--black); font-family: var(--font-pixel); font-size: 14px; }
 @media (max-width: 760px) { .trash-window { left: 8px; right: 8px; top: 8px; bottom: 52px; width: auto; max-height: none; } }
 @media (pointer: coarse) { .row-button { min-height: 44px; } }
@@ -396,7 +398,7 @@ button.secondary { background: var(--white); color: var(--ink); border: 2px soli
 .login-card p { margin: 0 0 12px; }
 .apply-input.inline { display: inline-block; width: auto; flex: 1; margin: 0; font-family: var(--font-body); }
 
-.hall-window { left: 50%; top: 40px; z-index: 2; width: min(620px, calc(100vw - 32px)); max-height: calc(100% - 40px - 58px); transform: translateX(-50%); }
+.hall-window { left: 50%; top: 40px; width: min(620px, calc(100vw - 32px)); max-height: calc(100% - 40px - 58px); transform: translateX(-50%); }
 .hall-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
 .hall-tab { min-height: 32px; padding: 4px 14px; background: var(--window); color: var(--ink); border: 2px solid var(--black); box-shadow: none; font: 13px var(--font-pixel); }
 .hall-tab.on { background: var(--night); color: var(--gold); }
@@ -417,3 +419,5 @@ button.secondary { background: var(--white); color: var(--ink); border: 2px soli
   .hall-score { grid-column: 2 / 4; align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
   .taskbar .who .label { display: none; }
 }
+
+@media (max-width: 760px) { .title-bar { cursor: default; } }
