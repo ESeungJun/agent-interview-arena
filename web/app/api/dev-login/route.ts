@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 import { cleanNickname, DEV_COOKIE, devLoginEnabled } from '@/lib/auth';
 import { fail } from '@/lib/http';
 import { readJson } from '@/lib/request';
+import { audited } from '@/lib/audited';
 
 export const dynamic = 'force-dynamic';
 
 /** 로컬 개발용 닉네임 로그인. Supabase 설정이 없고 production 이 아닐 때만 열린다 */
-export async function POST(req: Request) {
+async function handlePOST(req: Request) {
   if (!devLoginEnabled()) return fail('개발용 로그인은 꺼져 있습니다.', 404);
   const { body, error } = await readJson<{ name?: unknown }>(req);
   if (error) return error;
@@ -16,3 +17,5 @@ export async function POST(req: Request) {
   res.cookies.set(DEV_COOKIE, name, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 30 * 86_400 });
   return res;
 }
+
+export const POST = audited('login_dev', handlePOST);

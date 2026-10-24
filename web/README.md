@@ -63,6 +63,27 @@ npm run lint
 
 마이그레이션은 서버가 뜰 때 잠금(`pg_advisory_xact_lock`)을 잡고 적용해 여러 대가 동시에 떠도 한 번만 돈다.
 
+## 운영 기록 (D-44)
+
+두 표 모두 덧붙이기만 한다. 지원서 문서(`applications.doc`)는 다시 시도하면 단계 기록을 덮어써서 따로 남긴다. 지원자 키는 가리고, 요청 본문·쿠키는 남기지 않는다.
+
+| 표 | 무엇을 | 보관 |
+|---|---|---|
+| `events` | 페이지 열람, API 요청마다 한 줄(계정·IP·브라우저·경로·상태 코드·걸린 시간·실패 시 에러 메시지), GitHub 로그인 성공·실패, 로그아웃, 보안 경고, 정리 작업이 돌린 단계 오류. 지원서 화면의 3초 갱신은 실패만 남긴다 | 365일 (`EVENT_RETENTION_DAYS`), 워커 정리 주기에 지운다 |
+| `stage_runs` | 면접 단계를 돌릴 때마다 한 줄 (합격·탈락·서버 오류 모두): 판정 결과 전체(`stages`, 지원자 응답 원문 포함), 토큰·비용(`usage`, `cost_usd`), 걸린 시간, 출제 설정(`config`), 진행 로그 전체 | 지우지 않는다 |
+
+제출한 `.md` 원문은 지원서 버전에 그대로 남아 있다 (`applications.doc -> versions`). IP 를 남기므로 개인정보 처리방침에 수집 항목과 보관 기간을 적어야 한다.
+
+```sql
+-- 체급·단계별 실행 수, 합격률, 평균 비용·시간
+select division, challenge, count(*) runs, avg(passed::int) pass_rate, avg(cost_usd) avg_cost, avg(duration_ms) / 1000 avg_sec
+from stage_runs where status = 'done' group by 1, 2 order by 1, 2;
+-- 최근 서버 오류
+select finished_at, application_id, challenge, error from stage_runs where status = 'error' order by id desc limit 20;
+-- 계정별 접속·실패 요청
+select account_id, count(*) requests, count(*) filter (where not ok) failed, max(at) last_seen from events group by 1 order by last_seen desc;
+```
+
 ## 아직 없는 것
 
 - 중량급 유료 티켓 결제 (계획: [`docs/09_paid_ticket_plan.md`](../docs/09_paid_ticket_plan.md))
