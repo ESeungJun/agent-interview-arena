@@ -46,14 +46,14 @@ npm run lint
 | `lib/leaderboard.ts` | 체급별 명예의 전당 계산 |
 | `lib/byok.ts` | 무제한급 지원자 키: 확인, 대기열용 암호화(AES-256-GCM), 로그 가리기 |
 | `lib/llm.ts` | 면접관·경량·중량은 운영자 키, 무제한 지원자는 지원자 키, 지원자 호출에 추론 강도 |
-| `lib/auth.ts`, `proxy.ts`, `app/auth/callback` | Supabase Auth(GitHub) 세션, 개발용 로그인 |
+| `lib/auth.ts`, `proxy.ts`, `app/auth/callback` | Supabase Auth(Google) 세션, 개발용 로그인 |
 | `supabase/migrations` | 스키마. 서버가 시작할 때 순서대로 적용한다. 모든 표에 RLS 를 켜 anon 키로는 읽을 수 없다 |
 | `app/` | 바탕화면(채용 포스터·지원·지난 지원 이력·명예의 전당·휴지통), 면접장(복도·대화창·결과 통지서) |
 | `public/pixel` | 도트 이미지 (WebP) |
 
 ## 배포 (Supabase + Node 서버 한 대)
 
-1. Supabase 프로젝트를 만들고 Auth 에서 GitHub 공급자를 켠다. 리디렉션 URL 에 `https://<도메인>/auth/callback` 을 넣는다.
+1. Supabase 프로젝트를 만들고 Auth 에서 Google 공급자를 켠다 (Google Cloud 에서 OAuth 클라이언트를 만들어 Client ID·Secret 을 넣는다). 리디렉션 URL 에 `https://<도메인>/auth/callback` 을 넣는다.
 2. 서버 환경변수: `DATABASE_URL`(Supabase 연결 문자열), `DATABASE_CA_CERT`(Supabase CA 인증서, DB 인증서 검증), `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SITE_URL`, `ANTHROPIC_API_KEY`, `ARENA_BYOK_SECRET`, `ARENA_EXAM_SECRET`(공격 편성 시드, 분기 중간에 바꾸지 않는다).
 3. 면접관 프롬프트는 비공개 서브모듈이다. 배포 서버(또는 빌드 환경)에 `agent-interview-arena-prompts` 읽기 전용 deploy key 를 등록하고 `git submodule update --init` 으로 받는다. 프롬프트가 없으면 빌드는 되지만 면접이 실패한다.
 4. `npm run build && npm start`. 빌드 전에 프롬프트 내장본(`core/assets.generated.ts`)을 생성한다. 스키마는 서버가 처음 뜰 때 적용된다.
@@ -79,6 +79,7 @@ npx wrangler secret put DATABASE_CA_CERT
 npx wrangler secret put SITE_URL            # 예: https://agent-interview-arena.<계정>.workers.dev
 openssl rand -base64 32 | npx wrangler secret put ARENA_BYOK_SECRET
 openssl rand -base64 32 | npx wrangler secret put ARENA_EXAM_SECRET   # 분기 중간에 바꾸지 않는다
+npx wrangler secret put ARENA_ADMIN_EMAILS  # 운영자 화면에 들어올 이메일 (쉼표로 구분)
 npx wrangler deploy                    # Docker 가 켜져 있어야 이미지를 빌드한다
 ```
 
@@ -90,7 +91,7 @@ Supabase URL·공개 키는 비밀이 아니라 `cloudflare/wrangler.jsonc` 의 
 
 | 표 | 무엇을 | 보관 |
 |---|---|---|
-| `events` | 페이지 열람, API 요청마다 한 줄(계정·IP·브라우저·경로·상태 코드·걸린 시간·실패 시 에러 메시지), GitHub 로그인 성공·실패, 로그아웃, 보안 경고, 정리 작업이 돌린 단계 오류. 지원서 화면의 3초 갱신은 실패만 남긴다 | 365일 (`EVENT_RETENTION_DAYS`), 워커 정리 주기에 지운다 |
+| `events` | 페이지 열람, API 요청마다 한 줄(계정·IP·브라우저·경로·상태 코드·걸린 시간·실패 시 에러 메시지), Google 로그인 성공·실패, 로그아웃, 보안 경고, 정리 작업이 돌린 단계 오류. 지원서 화면의 3초 갱신은 실패만 남긴다 | 365일 (`EVENT_RETENTION_DAYS`), 워커 정리 주기에 지운다 |
 | `stage_runs` | 면접 단계를 돌릴 때마다 한 줄 (합격·탈락·서버 오류 모두): 판정 결과 전체(`stages`, 지원자 응답 원문 포함), 토큰·비용(`usage`, `cost_usd`), 걸린 시간, 출제 설정(`config`), 진행 로그 전체 | 지우지 않는다 |
 
 제출한 `.md` 원문은 지원서 버전에 그대로 남아 있다 (`applications.doc -> versions`). IP 를 남기므로 개인정보 처리방침에 수집 항목과 보관 기간을 적어야 한다.

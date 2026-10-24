@@ -89,6 +89,18 @@ export async function recordStageRun(r: StageRunInput): Promise<void> {
   }
 }
 
+/** 서버 오류를 운영 기록에 남긴다 (운영자 화면의 오류 수에 잡힌다) */
+export async function logServerError(where: string, error: unknown): Promise<void> {
+  const message = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
+  await logEvent({ kind: 'server_error', ok: false, data: { where, error: maskKeys(message).slice(0, 4000) } });
+}
+
+/** 잡히지 않은 서버 오류를 남긴다 (instrumentation.ts 가 서버 시작 때 한 번 부른다) */
+export function watchServerErrors(): void {
+  process.on('unhandledRejection', reason => void logServerError('unhandledRejection', reason));
+  process.on('uncaughtExceptionMonitor', error => void logServerError('uncaughtException', error));
+}
+
 /** 보관 기간이 지난 접속 기록을 지운다 (워커 정리 주기에 돈다) */
 export async function pruneEvents(): Promise<void> {
   await (await getDb()).query('delete from events where at < $1', [new Date(Date.now() - EVENT_RETENTION_DAYS * 86_400_000).toISOString()]);

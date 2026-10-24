@@ -8,7 +8,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { runChallenge, type Challenge } from '../../core/interview.ts';
-import { logEvent, pruneEvents, recordStageRun } from './audit.ts';
+import { logEvent, logServerError, pruneEvents, recordStageRun } from './audit.ts';
 import { BYOK_TTL_MS, maskKeys, openKey } from './byok.ts';
 import { getDb } from './db.ts';
 import { arenaLlm } from './llm.ts';
@@ -77,6 +77,7 @@ async function loop(): Promise<void> {
       }
     } catch (e) {
       console.error('[worker] 대기열 처리 실패:', maskKeys(e instanceof Error ? e.message : String(e)));
+      await logServerError('worker.loop', e);
     }
     await sleep(POLL_MS);
   }
