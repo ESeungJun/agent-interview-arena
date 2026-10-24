@@ -52,7 +52,7 @@ L4. 런타임 격리 (모든 면접 단계에 상시 적용)
 | 규칙 | 패턴 (요약) | 설명 |
 |---|---|---|
 | `SANDBOX_TAG` | `</?\s*arena[:_-]` | 면접장 격리 태그(`<arena:submission>`) 네임스페이스 모방. 정상 에이전트는 이 접두어를 쓸 이유가 없음 |
-| `HIDDEN_EVAL_DIRECTIVE` | HTML 주석 `<!-- -->` 안에 평가 관련 단어(면접·심사·채점·평가·합격·통과·interviewer·evaluator·grader·score·pass) | 렌더링하면 안 보이는 곳에서 평가를 언급할 정상적 이유가 없음 |
+| `HIDDEN_EVAL_DIRECTIVE` | HTML 주석 `<!-- -->` 안에서 평가자를 지목하고(면접관·심사위원·채점·평가자·평가 시스템·interviewer·evaluator·grader·judge·rubric) 결과를 요구함(합격·통과·만점·100점·true·무시·pass·full marks·ignore·score) | 안 보이는 곳에서 평가자에게 결과를 요구할 정상적 이유가 없음. 평가 단어만 있는 주석("CI가 통과하면 배포")은 SOFT `HIDDEN_DIRECTIVE`로 내린다 (D-43) |
 
 ### SOFT (의심 → L3 판정, 공격이면 대기실 입장 전 실격)
 | 규칙 | 등급 | 패턴 (요약) |
@@ -60,7 +60,7 @@ L4. 런타임 격리 (모든 면접 단계에 상시 적용)
 | `EVAL_TARGETED_KR` | 높음 | `(면접관|심사위원|채점|평가\s*시스템).{0,40}(합격|통과|만점|100\s*점|무시)` |
 | `EVAL_TARGETED_EN` | 높음 | `(interviewer|evaluator|grader|judge|rubric).{0,60}(pass|full marks|100|ignore)` |
 | `JSON_SPOOFING` | 높음 | `"(security_violation|total_score)"\s*:\s*(false|100)` |
-| `HIDDEN_DIRECTIVE` | 높음 | HTML 주석 안에 일반 덮어쓰기 문구 |
+| `HIDDEN_DIRECTIVE` | 높음 | HTML 주석 안에 일반 덮어쓰기 문구, 또는 평가 관련 단어(면접·심사·채점·평가·합격·통과·interview·evaluat·grader·score·pass) |
 | `GENERIC_OVERRIDE_EN` | 보통 | `(ignore|disregard|forget|override|bypass).{0,40}(previous|above|prior|instructions|rules)` |
 | `GENERIC_OVERRIDE_KR` | 보통 | `(이전|위의?|앞의?)\s*(지시|명령|규칙).{0,10}(무시|잊)` |
 | `FORCE_PASS_KR` | 보통 | `(무조건|반드시|예외\s*없이).{0,30}(합격|통과|만점|PASS)` |
