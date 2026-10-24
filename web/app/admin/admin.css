@@ -1,0 +1,64 @@
+/* 운영자 화면. 게임 화면과 달리 읽기 쉬운 시스템 글꼴과 촘촘한 표를 쓴다 */
+.admin {
+  --a-bg: #f6f7f9;
+  --a-panel: #ffffff;
+  --a-line: #e1e4ea;
+  --a-ink: #1c2230;
+  --a-dim: #6b7385;
+  --a-accent: #2f5bd3;
+  --a-bad: #c62828;
+  --a-bad-bg: #fdecec;
+  --a-ok: #1e7d43;
+  min-height: 100vh;
+  padding: 20px 24px 48px;
+  background: var(--a-bg);
+  color: var(--a-ink);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Segoe UI', sans-serif;
+}
+.admin header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.admin h1 { font-size: 18px; margin: 0; }
+.admin h2 { font-size: 15px; margin: 28px 0 8px; }
+.admin h3 { font-size: 14px; margin: 20px 0 6px; }
+.admin .who, .admin .dim { color: var(--a-dim); font-size: 12px; }
+.admin td .dim, .admin td .mono.dim { display: block; }
+.admin a { color: var(--a-accent); text-decoration: none; }
+.admin a:hover { text-decoration: underline; }
+.admin nav, .admin .filters { display: flex; gap: 4px; flex-wrap: wrap; margin: 16px 0; }
+.admin nav a, .admin .filters a {
+  padding: 6px 12px; border: 1px solid var(--a-line); border-radius: 6px; background: var(--a-panel); color: var(--a-ink);
+}
+.admin .filters a { padding: 3px 9px; font-size: 12px; }
+.admin nav a[aria-current='page'], .admin .filters a[aria-current='page'] { background: var(--a-ink); border-color: var(--a-ink); color: #fff; }
+.admin .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.admin .tile {
+  display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; background: var(--a-panel);
+  border: 1px solid var(--a-line); border-radius: 8px; color: var(--a-ink);
+}
+.admin .tile .label { font-size: 12px; color: var(--a-dim); }
+.admin .tile strong { font-size: 20px; font-variant-numeric: tabular-nums; }
+.admin .tile .sub { font-size: 12px; color: var(--a-dim); }
+.admin .tile.warn { border-color: var(--a-bad); background: var(--a-bad-bg); }
+.admin .tile.warn .sub { color: var(--a-bad); }
+.admin table { width: 100%; border-collapse: collapse; background: var(--a-panel); border: 1px solid var(--a-line); font-size: 13px; }
+.admin th, .admin td { padding: 7px 10px; border-bottom: 1px solid var(--a-line); text-align: left; vertical-align: top; }
+.admin th { font-size: 12px; color: var(--a-dim); font-weight: 600; background: #fafbfc; position: sticky; top: 0; }
+.admin .num { text-align: right; font-variant-numeric: tabular-nums; }
+.admin tr.bad td { background: var(--a-bad-bg); }
+.admin .err { color: var(--a-bad); }
+.admin .empty { color: var(--a-dim); text-align: center; padding: 24px; }
+.admin .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; word-break: break-all; }
+.admin .note { color: var(--a-dim); font-size: 12px; }
+.admin .warning { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.admin .warning button { font: inherit; font-size: 12px; padding: 1px 8px; border: 1px solid var(--a-bad); color: var(--a-bad); background: #fff; border-radius: 4px; cursor: pointer; }
+.admin .config { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.admin .config li { padding: 4px 10px; border-radius: 6px; border: 1px solid var(--a-line); background: var(--a-panel); font-size: 12px; }
+.admin .config li.ok { border-color: #b7dfc5; color: var(--a-ok); }
+.admin .config li.missing { border-color: var(--a-bad); color: var(--a-bad); }
+.admin pre { background: #10141c; color: #e6e9ef; padding: 12px; border-radius: 6px; overflow: auto; max-height: 480px; font-size: 12px; }
+.admin dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 4px 16px; }
+.admin dt { font-size: 12px; color: var(--a-dim); }
+.admin dd { margin: 0 0 6px; }
+@media (max-width: 720px) {
+  .admin { padding: 16px; }
+  .admin table { display: block; overflow-x: auto; }
+}

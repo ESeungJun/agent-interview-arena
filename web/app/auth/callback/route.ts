@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { clientMeta, logEvent } from '@/lib/audit';
-import { supabaseEnabled, supabaseServer } from '@/lib/auth';
+import { ensureAccount, getViewer, supabaseEnabled, supabaseServer } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,15 +12,19 @@ function siteUrl(req: Request): string {
   return host ? `${proto}://${host}` : new URL(req.url).origin;
 }
 
-/** GitHub 로그인 뒤 돌아오는 곳. 받은 코드를 세션으로 바꾸고 바탕화면으로 보낸다 */
+/** Google 로그인 뒤 돌아오는 곳. 받은 코드를 세션으로 바꾸고, 계정 행(accounts)을 만든 뒤 바탕화면으로 보낸다 */
 export async function GET(req: Request) {
   const code = new URL(req.url).searchParams.get('code');
   const home = siteUrl(req);
   if (!supabaseEnabled() || !code) return NextResponse.redirect(`${home}/`);
   const { data, error } = await (await supabaseServer()).auth.exchangeCodeForSession(code);
+  if (!error) {
+    const viewer = await getViewer();
+    if (viewer) await ensureAccount(viewer, { login: true });
+  }
   await logEvent({
     kind: 'login', ok: !error, method: 'GET', path: '/auth/callback', accountId: data.user?.id ?? null, ...clientMeta(req.headers),
-    data: error ? { error: error.message } : { provider: 'github' },
+    data: error ? { error: error.message } : { provider: data.user?.app_metadata?.provider ?? 'google' },
   });
   return NextResponse.redirect(error ? `${home}/?login=failed` : `${home}/`);
 }

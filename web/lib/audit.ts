@@ -43,7 +43,7 @@ export async function logEvent(e: EventInput): Promise<void> {
       [
         e.kind, e.ok, e.accountId ?? null, uuidOrNull(e.applicationId), e.version ?? null, e.challenge ?? null, e.method ?? null,
         e.path?.slice(0, 300) ?? null, e.status ?? null, e.durationMs ?? null, e.ip ?? null, e.userAgent ?? null,
-        JSON.parse(maskKeys(JSON.stringify(e.data ?? {}))),
+        maskKeys(JSON.stringify(e.data ?? {})),
       ],
     );
   } catch (err) {
@@ -72,7 +72,8 @@ export type StageRunInput = {
 export async function recordStageRun(r: StageRunInput): Promise<void> {
   const done = r.status === 'done' ? r : undefined;
   const cost = r.usage ? (r.usage.interviewer.costUsd ?? 0) + (r.usage.candidate.costUsd ?? 0) : null;
-  const json = (v: unknown) => (v === undefined ? null : JSON.parse(maskKeys(JSON.stringify(v))));
+  // jsonb 값은 JSON 문자열로 넘긴다. node-postgres 는 JS 배열을 Postgres 배열 문법으로 바꿔 보내 jsonb 에 넣으면 실패한다
+  const json = (v: unknown) => (v === undefined ? null : maskKeys(JSON.stringify(v)));
   try {
     await (await getDb()).query(
       `insert into stage_runs (application_id, version, challenge, account_id, division, md_hash, quarter, status, passed, security_ban, result, error,
@@ -87,6 +88,18 @@ export async function recordStageRun(r: StageRunInput): Promise<void> {
   } catch (err) {
     console.error('[audit] 단계 실행 기록 저장 실패:', maskKeys(err instanceof Error ? err.message : String(err)));
   }
+}
+
+/** 서버 오류를 운영 기록에 남긴다 (운영자 화면의 오류 수에 잡힌다) */
+export async function logServerError(where: string, error: unknown): Promise<void> {
+  const message = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
+  await logEvent({ kind: 'server_error', ok: false, data: { where, error: maskKeys(message).slice(0, 4000) } });
+}
+
+/** 잡히지 않은 서버 오류를 남긴다 (instrumentation.ts 가 서버 시작 때 한 번 부른다) */
+export function watchServerErrors(): void {
+  process.on('unhandledRejection', reason => void logServerError('unhandledRejection', reason));
+  process.on('uncaughtExceptionMonitor', error => void logServerError('uncaughtException', error));
 }
 
 /** 보관 기간이 지난 접속 기록을 지운다 (워커 정리 주기에 돈다) */
