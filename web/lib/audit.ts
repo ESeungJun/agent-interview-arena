@@ -43,7 +43,7 @@ export async function logEvent(e: EventInput): Promise<void> {
       [
         e.kind, e.ok, e.accountId ?? null, uuidOrNull(e.applicationId), e.version ?? null, e.challenge ?? null, e.method ?? null,
         e.path?.slice(0, 300) ?? null, e.status ?? null, e.durationMs ?? null, e.ip ?? null, e.userAgent ?? null,
-        JSON.parse(maskKeys(JSON.stringify(e.data ?? {}))),
+        maskKeys(JSON.stringify(e.data ?? {})),
       ],
     );
   } catch (err) {
@@ -72,7 +72,8 @@ export type StageRunInput = {
 export async function recordStageRun(r: StageRunInput): Promise<void> {
   const done = r.status === 'done' ? r : undefined;
   const cost = r.usage ? (r.usage.interviewer.costUsd ?? 0) + (r.usage.candidate.costUsd ?? 0) : null;
-  const json = (v: unknown) => (v === undefined ? null : JSON.parse(maskKeys(JSON.stringify(v))));
+  // jsonb 값은 JSON 문자열로 넘긴다. node-postgres 는 JS 배열을 Postgres 배열 문법으로 바꿔 보내 jsonb 에 넣으면 실패한다
+  const json = (v: unknown) => (v === undefined ? null : maskKeys(JSON.stringify(v)));
   try {
     await (await getDb()).query(
       `insert into stage_runs (application_id, version, challenge, account_id, division, md_hash, quarter, status, passed, security_ban, result, error,

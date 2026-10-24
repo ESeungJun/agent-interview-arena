@@ -11,9 +11,13 @@
       "image": "../Dockerfile",
       "image_build_context": "..",
       "instance_type": "basic",
-      "max_instances": 1
+      "max_instances": 1,
+      // 기본은 첫 요청에 가까운 곳에 뜬다. DB(서울)와 멀어지지 않게 아시아 안으로 묶는다
+      "constraints": { "regions": ["APAC"] }
     }
   ],
+  // 그림 같은 정적 파일은 컨테이너를 거치지 않고 엣지에서 바로 내보낸다. 없는 경로만 Worker(→ 컨테이너)로 간다
+  "assets": { "directory": "../web/public" },
   "durable_objects": { "bindings": [{ "name": "ARENA", "class_name": "Arena" }] },
   "exports": { "Arena": { "type": "durable-object", "storage": "sqlite" } },
   // 꺼진 컨테이너를 다시 깨운다
