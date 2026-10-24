@@ -62,3 +62,8 @@
   .admin { padding: 16px; }
   .admin table { display: block; overflow-x: auto; }
 }
+.admin .bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.admin .actions { white-space: nowrap; }
+.admin button.copy { font: inherit; font-size: 12px; padding: 1px 8px; margin-left: 6px; border: 1px solid var(--a-line); border-radius: 4px; background: var(--a-panel); color: var(--a-ink); cursor: pointer; }
+.admin button.copy:hover { border-color: var(--a-accent); color: var(--a-accent); }
+.admin td.mono button.copy { display: block; margin: 4px 0 0; font-family: inherit; }
