@@ -4,7 +4,8 @@
  * - 면접 워커가 컨테이너 안에서 몇 분씩 돌지만 Cloudflare 는 그것을 활동으로 치지 않는다. 그래서 쉬는 시간이 지나도 끄지 않는다 (항상 켜 둠).
  * - 호스트 재시작 등으로 꺼지면 1분마다 도는 크론이 다시 깨운다. 끊긴 단계는 웹 워커의 정리 작업이 오류로 돌려 다시 시도할 수 있게 한다.
  * - 접속자 IP·원래 주소를 x-forwarded-* 로 넘긴다 (접속 기록, 다른 사이트 요청 차단, 로그인 리디렉션이 쓴다).
- * - 비밀값을 바꾸면(wrangler secret put) 떠 있는 컨테이너는 옛 값을 그대로 쓴다. 넘긴 값의 지문이 바뀌었으면 컨테이너를 다시 띄운다.
+ * - 비밀값을 바꾸면(wrangler secret put) 떠 있는 컨테이너는 옛 값을 그대로 쓴다. Durable Object 도 다시 만들어지지 않아 옛 env 를 들고 있으므로,
+ *   요청마다 Worker 가 받은 최신 값을 넘기고(sync) 지문이 바뀌었으면 컨테이너를 다시 띄운다.
  */
 import { Container, getContainer } from '@cloudflare/containers';
 
@@ -34,26 +35,31 @@ export class Arena extends Container<Env> {
 
   constructor(ctx: ConstructorParameters<typeof Container>[0], env: Env) {
     super(ctx, env);
-    const vars: Record<string, string> = { NODE_ENV: 'production', PORT: '3100', HOSTNAME: '0.0.0.0' };
-    for (const key of PASSED) if (env[key]) vars[key] = env[key] as string;
-    this.envVars = vars;
+    this.envVars = containerVars(env);
   }
 
   /** 대기열의 면접이 도는 중일 수 있어 쉬는 시간이 지나도 끄지 않는다 */
   override async onActivityExpired(): Promise<void> {}
 
-  override async fetch(request: Request): Promise<Response> {
-    const current = await signature(this.envVars ?? {});
-    const live = ['running', 'healthy'].includes((await this.getState()).status);
-    // 지문은 이 객체가 컨테이너를 띄우기 직전에만 저장한다. onStart 는 코드가 바뀌어 다시 붙을 때도 불려 옛 컨테이너를 새 값으로 적어 버린다
-    if (live && (await this.ctx.storage.get<string>('envSignature')) !== current) {
+  /** Worker 가 받은 최신 값을 쓴다. 떠 있는 컨테이너가 다른 값으로 떠 있으면 멈추고, 다음 fetch 가 새 값으로 띄운다 */
+  async sync(vars: Record<string, string>): Promise<void> {
+    this.envVars = vars;
+    const current = await signature(vars);
+    const live = async () => ['running', 'healthy', 'stopping'].includes((await this.getState()).status);
+    // 지문은 컨테이너를 띄우기 직전에만 적는다 (떠 있는 동안 적으면 옛 컨테이너를 새 값으로 적어 버린다)
+    if ((await live()) && (await this.ctx.storage.get<string>('envSignature')) !== current) {
       await this.stop();
       // 완전히 멈춘 뒤에 새 값으로 띄운다 (멈추는 중에 넘기면 옛 컨테이너가 받을 수 있다)
-      for (let i = 0; i < 60 && ['running', 'healthy', 'stopping'].includes((await this.getState()).status); i++) await scheduler.wait(500);
+      for (let i = 0; i < 60 && (await live()); i++) await scheduler.wait(500);
     }
-    if (!['running', 'healthy'].includes((await this.getState()).status)) await this.ctx.storage.put('envSignature', current);
-    return super.fetch(request);
+    if (!(await live())) await this.ctx.storage.put('envSignature', current);
   }
+}
+
+function containerVars(env: Env): Record<string, string> {
+  const vars: Record<string, string> = { NODE_ENV: 'production', PORT: '3100', HOSTNAME: '0.0.0.0' };
+  for (const key of PASSED) if (env[key]) vars[key] = env[key] as string;
+  return vars;
 }
 
 /** 넘긴 변수의 지문 (값 자체는 저장하지 않는다) */
@@ -64,7 +70,11 @@ async function signature(vars: Record<string, string>): Promise<string> {
 }
 
 /** 웹은 컨테이너 하나로 돈다 (대기열 워커가 한 프로세스에 있다) */
-const arena = (env: Env) => getContainer(env.ARENA, 'main');
+async function arena(env: Env) {
+  const stub = getContainer(env.ARENA, 'main');
+  await stub.sync(containerVars(env));
+  return stub;
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -73,11 +83,11 @@ export default {
     forwarded.headers.set('x-forwarded-for', request.headers.get('cf-connecting-ip') ?? '');
     forwarded.headers.set('x-forwarded-host', url.host);
     forwarded.headers.set('x-forwarded-proto', url.protocol.replace(':', ''));
-    return arena(env).fetch(forwarded);
+    return (await arena(env)).fetch(forwarded);
   },
 
   /** 컨테이너가 꺼져 있으면 다시 깨워 대기열을 이어서 처리하게 한다 */
   async scheduled(_event: ScheduledController, env: Env): Promise<void> {
-    await arena(env).fetch(new Request('https://arena.internal/api/health'));
+    await (await arena(env)).fetch(new Request('https://arena.internal/api/health'));
   },
 } satisfies ExportedHandler<Env>;
