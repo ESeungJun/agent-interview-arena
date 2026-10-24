@@ -14,6 +14,10 @@ const FLOOD = /(.{5,})\1{20,}/;
 const SANDBOX_TAG = /<\/?\s*arena[:_-]/i;
 const HTML_COMMENT = /<!--([\s\S]*?)-->/g;
 const EVAL_WORDS = /(면접|심사|채점|평가|합격|통과|interview|evaluat|grader|score|\bpass\b)/i;
+// 숨은 주석이 평가자를 지목하고(EVAL_TARGET) 결과를 요구할 때(EVAL_OUTCOME)만 즉시 실격한다.
+// 평가 단어만 있는 주석("CI가 통과하면", "평가 기준 TODO")은 HIGH 의심으로 분류기에 넘긴다 (D-43).
+const EVAL_TARGET = /(면접관|심사관|심사위원|채점|평가자|평가\s*시스템|interviewer|evaluator|grader|judge|rubric)/i;
+const EVAL_OUTCOME = /(합격|통과|만점|100\s*점|true|무시|\bpass|full\s*marks|ignore|score)/i;
 
 const SOFT_RULES: { name: string; level: "HIGH" | "NORMAL"; regex: RegExp }[] = [
   { name: "EVAL_TARGETED_KR", level: "HIGH", regex: /(면접관|심사위원|채점|평가\s*시스템).{0,40}(합격|통과|만점|100\s*점|무시)/ },
@@ -43,9 +47,9 @@ export function runSecurityGate(md: string): GateResult {
 
   const softHits = new Set<string>();
   for (const [, body] of md.matchAll(HTML_COMMENT)) {
-    if (EVAL_WORDS.test(body))
+    if (EVAL_TARGET.test(body) && EVAL_OUTCOME.test(body))
       return ban("HIDDEN_EVAL_DIRECTIVE", "숨겨진 주석 안에서 평가 관련 지시가 감지되었습니다.", body.trim().slice(0, 80));
-    if (SOFT_RULES.some(r => r.regex.test(body))) softHits.add("HIDDEN_DIRECTIVE");
+    if (EVAL_WORDS.test(body) || SOFT_RULES.some(r => r.regex.test(body))) softHits.add("HIDDEN_DIRECTIVE");
   }
 
   // L2. SOFT
