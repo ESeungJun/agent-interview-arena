@@ -6,6 +6,7 @@ import {
 } from '@/lib/admin';
 import { auditPage } from '@/lib/audited';
 import { getViewer } from '@/lib/auth';
+import CopyButton from './CopyButton';
 import './admin.css';
 
 export const dynamic = 'force-dynamic';
@@ -25,6 +26,7 @@ const ago = (iso: string | null) => {
   return s < 60 ? `${s}초 전` : s < 3600 ? `${Math.round(s / 60)}분 전` : s < 86_400 ? `${Math.round(s / 3600)}시간 전` : `${Math.round(s / 86_400)}일 전`;
 };
 const STAGE: Record<string, string> = { doc: '서류', r1: '1차', r2: '2차', final: '최종' };
+const json = (v: unknown) => JSON.stringify(v, (_k, x) => (x instanceof Date ? x.toISOString() : x), 2);
 
 async function revoke(form: FormData) {
   'use server';
@@ -149,9 +151,17 @@ async function Runs({ run, failed, account }: { run?: string; failed: boolean; a
     const r = await runDetail(Number(run));
     if (!r) return <p className="empty">실행 기록이 없습니다</p>;
     const { logs, stages, usage, config, ...rest } = r;
+    const full = [
+      `# 실행 #${String(r.id)} · ${STAGE[r.challenge as string] ?? String(r.challenge)} · ${String(r.status)}`,
+      json(rest),
+      '## 진행 로그', ((logs as string[]) ?? []).join('\n') || '—',
+      '## 측정값 (usage)', json(usage),
+      '## 출제 설정 (config)', json(config),
+      '## 판정 결과 (stages)', json(stages),
+    ].join('\n\n');
     return (
       <section className="detail">
-        <a href="?tab=runs">← 목록</a>
+        <div className="bar"><a href="?tab=runs">← 목록</a><CopyButton text={full} label="전체 복사" /></div>
         <h2>실행 #{String(r.id)} · {STAGE[r.challenge as string] ?? String(r.challenge)} · {String(r.status)}</h2>
         <dl>{Object.entries(rest).map(([k, v]) => <div key={k}><dt>{k}</dt><dd className="mono">{v instanceof Date ? v.toISOString() : String(v ?? '—')}</dd></div>)}</dl>
         <h3>측정값 (usage)</h3><pre>{JSON.stringify(usage, null, 2)}</pre>
@@ -179,7 +189,10 @@ async function Runs({ run, failed, account }: { run?: string; failed: boolean; a
               <td>{STAGE[r.challenge] ?? r.challenge}</td>
               <td>{r.status === 'error' ? <span className="err">오류: {r.error}</span> : r.result}</td>
               <td className="num">{r.durationSec.toFixed(0)}초</td><td className="num">{usd(r.costUsd)}</td>
-              <td><a href={`?tab=runs&run=${r.id}`}>상세</a></td>
+              <td className="actions">
+                <a href={`?tab=runs&run=${r.id}`}>상세</a>
+                {r.status === 'error' && <CopyButton text={json(r)} />}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -208,7 +221,10 @@ async function Logs({ kind, failed, account }: { kind?: string; failed: boolean;
               <td>{kst(e.at)}</td><td className="mono">{e.kind}</td><td>{e.ok ? '성공' : '실패'}{e.status ? ` ${e.status}` : ''}</td>
               <td className="mono">{e.method} {e.path}</td><td>{e.account ?? '—'}</td>
               <td className="mono" title={e.userAgent ?? ''}>{e.ip ?? '—'}</td><td className="num">{e.durationMs ?? '—'}</td>
-              <td className="mono">{Object.keys(e.data).length ? JSON.stringify(e.data) : ''}</td>
+              <td className="mono">
+                {Object.keys(e.data).length ? JSON.stringify(e.data) : ''}
+                {!e.ok && <CopyButton text={json(e)} />}
+              </td>
             </tr>
           ))}
         </tbody>
