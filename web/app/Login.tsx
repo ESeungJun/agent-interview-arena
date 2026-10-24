@@ -4,13 +4,13 @@ import { createBrowserClient } from '@supabase/ssr';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { BASE } from './pixel/cast';
-import type { LoginMode } from './types';
+import type { LoginMode, SupabasePublic } from './types';
 
 /**
  * 지원 영역 자리의 로그인. 운영은 Google 로그인(Supabase Auth), 로컬 개발은 닉네임만 넣는 개발용 로그인.
  * 지원 이력·티켓·리더보드 이름이 계정에 묶이므로 지원하려면 로그인해야 한다.
  */
-export default function Login({ mode }: { mode: LoginMode }) {
+export default function Login({ mode, supabase: config }: { mode: LoginMode; supabase?: SupabasePublic }) {
   const router = useRouter();
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -19,10 +19,13 @@ export default function Login({ mode }: { mode: LoginMode }) {
   async function google() {
     setBusy(true);
     setError(null);
-    const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
-    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${location.origin}${BASE}/auth/callback` } });
-    if (error) {
-      setError(error.message);
+    try {
+      if (!config) throw new Error('로그인 설정을 받지 못했습니다. 새로고침해 주세요.');
+      const supabase = createBrowserClient(config.url, config.anonKey);
+      const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${location.origin}${BASE}/auth/callback` } });
+      if (error) throw error;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
       setBusy(false);
     }
   }
