@@ -8,6 +8,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { runChallenge, type Challenge } from '../../core/interview.ts';
+import { logEvent, logServerError, pruneEvents, recordStageRun } from './audit.ts';
 import { BYOK_TTL_MS, maskKeys, openKey } from './byok.ts';
 import { getDb } from './db.ts';
 import { arenaLlm } from './llm.ts';
@@ -76,6 +77,7 @@ async function loop(): Promise<void> {
       }
     } catch (e) {
       console.error('[worker] 대기열 처리 실패:', maskKeys(e instanceof Error ? e.message : String(e)));
+      await logServerError('worker.loop', e);
     }
     await sleep(POLL_MS);
   }
@@ -104,7 +106,13 @@ async function drop(jobId: number): Promise<void> {
   await (await getDb()).query('delete from jobs where id = $1', [jobId]);
 }
 
-async function fail(job: Pick<Job, 'id' | 'application_id' | 'version' | 'challenge'>, message: string): Promise<void> {
+/** fromSweep: 정리 작업이 돌린 오류. 실행 중 오류는 run 이 stage_runs 에 남기고, 이쪽은 events 에 남긴다 */
+async function fail(job: Pick<Job, 'id' | 'application_id' | 'version' | 'challenge'>, message: string, fromSweep = false): Promise<void> {
+  if (fromSweep) {
+    await logEvent({
+      kind: 'stage_error', ok: false, applicationId: job.application_id, version: job.version, challenge: job.challenge, data: { error: maskKeys(message), by: 'sweep' },
+    });
+  }
   await mutateAttempt(job.application_id, job.version, job.challenge, a => ({
     ...a, status: 'error', error: maskKeys(message), errors: (a.errors ?? 0) + 1, finishedAt: new Date().toISOString(),
   }));
@@ -117,17 +125,21 @@ async function sweep(): Promise<void> {
   const stale = await db.query<Job>('select id, application_id, version, challenge from jobs where claimed_at is not null and coalesce(heartbeat_at, claimed_at) < $1', [
     new Date(Date.now() - STALE_MS).toISOString(),
   ]);
-  for (const job of stale) await fail(job, '면접 워커가 끝내지 못했습니다');
+  for (const job of stale) await fail(job, '면접 워커가 끝내지 못했습니다', true);
   const expired = await db.query<Job>('select id, application_id, version, challenge from jobs where claimed_at is null and byok_cipher is not null and created_at < $1', [
     new Date(Date.now() - BYOK_TTL_MS).toISOString(),
   ]);
-  for (const job of expired) await fail(job, '대기 시간이 길어 지원자 키를 버렸습니다');
+  for (const job of expired) await fail(job, '대기 시간이 길어 지원자 키를 버렸습니다', true);
+  await pruneEvents();
 }
 
 async function run(job: Job): Promise<void> {
   const { application_id: id, version: n, challenge } = job;
   // 진행 로그는 모아서 잠깐마다 한 번에 쓴다 (줄마다 쓰면 지원서 행을 너무 자주 잠근다)
   let pending: string[] = [];
+  // 단계 실행 기록(stage_runs)에 남길 진행 로그 전체
+  const allLogs: string[] = [];
+  let audit: Omit<Parameters<typeof recordStageRun>[0], 'status' | 'logs'> | undefined;
   let flushing: Promise<void> = Promise.resolve();
   const flush = () => {
     if (pending.length === 0) return flushing;
@@ -148,6 +160,10 @@ async function run(job: Job): Promise<void> {
     const division = DIVISIONS[app.division];
     const byokKey = job.byok_cipher ? openKey(job.byok_cipher) : undefined;
     await mutateAttempt(id, n, challenge, a => ({ ...a, status: 'running' }));
+    audit = {
+      applicationId: id, version: n, challenge, accountId: app.ownerId, division: app.division, mdHash: version.mdHash, quarter: version.quarter,
+      startedAt: new Date().toISOString(), workerId: WORKER_ID,
+    };
     const report = await runChallenge(
       {
         md: version.md,
@@ -160,7 +176,11 @@ async function run(job: Job): Promise<void> {
         // 정규식은 키워드 없는 정중한 주입을 못 잡는다. 표본 검사(10%)로 두면 나머지 90%는 서류 면접관 한 명만 막는다.
         screenAll: true,
         examSecret: examSecret(),
-        log: line => void pending.push(maskKeys(line)),
+        log: line => {
+          const masked = maskKeys(line);
+          pending.push(masked);
+          allLogs.push(masked);
+        },
       },
       challenge,
       version.results,
@@ -169,6 +189,8 @@ async function run(job: Job): Promise<void> {
     await flush();
     if (!(await stillMine(job.id))) {
       console.error(`[application ${id} v${n} ${challenge}] 정리 작업이 이미 오류로 돌린 단계라 결과를 버립니다`);
+      // 결과는 버려도 쓴 비용은 남긴다
+      await recordStageRun({ ...audit, status: 'error', logs: allLogs, error: '정리 작업이 이미 오류로 돌린 단계라 결과를 버림', usage: report.usage });
       return;
     }
     await mutateApplication(id, async (a, q) => {
@@ -181,12 +203,20 @@ async function run(job: Job): Promise<void> {
       const ban = securityBanOf(report.stages);
       if (ban) await q('insert into warnings (account_id, application_id, rule) values ($1, $2, $3)', [a.ownerId, a.id, ban.rule]);
     });
+    const ban = securityBanOf(report.stages);
+    await recordStageRun({
+      ...audit, status: 'done', logs: allLogs, passed: report.passed, securityBan: ban?.rule, result: report.result, backend: report.backend,
+      config: report.config, usage: report.usage, stages: report.stages,
+    });
+    if (ban) await logEvent({ kind: 'security_warning', ok: false, accountId: app.ownerId, applicationId: id, version: n, challenge, data: { rule: ban.rule } });
     await drop(job.id);
   } catch (e) {
     clearInterval(timer);
     await flush().catch(() => undefined);
     const message = e instanceof Error ? e.message : String(e);
     console.error(`[application ${id} v${n} ${challenge}] 실패:`, maskKeys(message));
+    if (audit) await recordStageRun({ ...audit, status: 'error', logs: allLogs, error: message });
+    else await logEvent({ kind: 'stage_error', ok: false, applicationId: id, version: n, challenge, data: { error: maskKeys(message), by: 'run' } });
     await fail(job, message);
   } finally {
     clearInterval(timer);

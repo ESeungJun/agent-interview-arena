@@ -4,11 +4,12 @@ import { classifyCharacter } from '@/lib/character';
 import { fail, requireViewer } from '@/lib/http';
 import { takeCharacterPreview } from '@/lib/limits';
 import { readJson } from '@/lib/request';
+import { audited } from '@/lib/audited';
 
 export const dynamic = 'force-dynamic';
 
 /** 첨부한 .md 의 캐릭터 미리 보기. 지원 전에 성격·직무를 판단해 보여 준다 (Haiku 1회, 같은 .md 는 다시 판단하지 않는다) */
-export async function POST(req: Request) {
+async function handlePOST(req: Request) {
   const auth = await requireViewer();
   if ('error' in auth) return auth.error;
   const { body, error } = await readJson<{ md?: unknown }>(req);
@@ -20,3 +21,5 @@ export async function POST(req: Request) {
   if (limited) return fail(limited, 429);
   return NextResponse.json(await classifyCharacter(md));
 }
+
+export const POST = audited('character_preview', handlePOST);

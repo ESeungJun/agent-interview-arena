@@ -1,4 +1,5 @@
-import { devLoginEnabled, getViewer, supabaseEnabled } from '@/lib/auth';
+import { auditPage } from '@/lib/audited';
+import { devLoginEnabled, getViewer, SUPABASE, supabaseEnabled } from '@/lib/auth';
 import { DIVISIONS, INTERVIEWER, MODEL_LABEL, type Division } from '@/lib/policy';
 import { challengeState, sealedChallenge, statusLabel, ticketsUsedToday } from '@/lib/runner';
 import { currentVersion, listByOwner } from '@/lib/store';
@@ -11,6 +12,7 @@ export const dynamic = 'force-dynamic';
 export const metadata = { title: { absolute: '에이전트 채용 · Agent Interview Arena' } };
 
 export default async function Page() {
+  await auditPage('/');
   const viewer = await getViewer();
   const mine = viewer ? await listByOwner(viewer.id) : [];
   const used = viewer ? await ticketsUsedToday(viewer.id) : { light: 0, middle: 0, open: 0 };
@@ -46,5 +48,5 @@ export default async function Page() {
   });
   const loginMode: LoginMode = supabaseEnabled() ? 'supabase' : devLoginEnabled() ? 'dev' : 'none';
 
-  return <Desktop viewer={viewer ? { name: viewer.name } : null} loginMode={loginMode} history={history} revisable={revisable} divisions={divisions} interviewer={MODEL_LABEL[INTERVIEWER]} />;
+  return <Desktop viewer={viewer ? { name: viewer.name } : null} loginMode={loginMode} supabase={loginMode === 'supabase' ? SUPABASE : undefined} history={history} revisable={revisable} divisions={divisions} interviewer={MODEL_LABEL[INTERVIEWER]} />;
 }
