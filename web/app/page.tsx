@@ -1,5 +1,5 @@
 import { auditPage } from '@/lib/audited';
-import { devLoginEnabled, getViewer, supabaseEnabled } from '@/lib/auth';
+import { devLoginEnabled, getViewer, SUPABASE, supabaseEnabled } from '@/lib/auth';
 import { DIVISIONS, INTERVIEWER, MODEL_LABEL, type Division } from '@/lib/policy';
 import { challengeState, sealedChallenge, statusLabel, ticketsUsedToday } from '@/lib/runner';
 import { currentVersion, listByOwner } from '@/lib/store';
@@ -48,5 +48,5 @@ export default async function Page() {
   });
   const loginMode: LoginMode = supabaseEnabled() ? 'supabase' : devLoginEnabled() ? 'dev' : 'none';
 
-  return <Desktop viewer={viewer ? { name: viewer.name } : null} loginMode={loginMode} history={history} revisable={revisable} divisions={divisions} interviewer={MODEL_LABEL[INTERVIEWER]} />;
+  return <Desktop viewer={viewer ? { name: viewer.name } : null} loginMode={loginMode} supabase={loginMode === 'supabase' ? SUPABASE : undefined} history={history} revisable={revisable} divisions={divisions} interviewer={MODEL_LABEL[INTERVIEWER]} />;
 }
