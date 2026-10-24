@@ -42,20 +42,16 @@ export class Arena extends Container<Env> {
   /** 대기열의 면접이 도는 중일 수 있어 쉬는 시간이 지나도 끄지 않는다 */
   override async onActivityExpired(): Promise<void> {}
 
-  override async onStart(): Promise<void> {
-    await this.ctx.storage.put('envSignature', await signature(this.envVars ?? {}));
-  }
-
   override async fetch(request: Request): Promise<Response> {
-    const { status } = await this.getState();
-    if (status === 'running' || status === 'healthy') {
-      const started = await this.ctx.storage.get<string>('envSignature');
-      if (started !== (await signature(this.envVars ?? {}))) {
-        await this.stop();
-        // 완전히 멈춘 뒤에 새 값으로 띄운다 (멈추는 중에 넘기면 옛 컨테이너가 받을 수 있다)
-        for (let i = 0; i < 60 && ['running', 'healthy', 'stopping'].includes((await this.getState()).status); i++) await scheduler.wait(500);
-      }
+    const current = await signature(this.envVars ?? {});
+    const live = ['running', 'healthy'].includes((await this.getState()).status);
+    // 지문은 이 객체가 컨테이너를 띄우기 직전에만 저장한다. onStart 는 코드가 바뀌어 다시 붙을 때도 불려 옛 컨테이너를 새 값으로 적어 버린다
+    if (live && (await this.ctx.storage.get<string>('envSignature')) !== current) {
+      await this.stop();
+      // 완전히 멈춘 뒤에 새 값으로 띄운다 (멈추는 중에 넘기면 옛 컨테이너가 받을 수 있다)
+      for (let i = 0; i < 60 && ['running', 'healthy', 'stopping'].includes((await this.getState()).status); i++) await scheduler.wait(500);
     }
+    if (!['running', 'healthy'].includes((await this.getState()).status)) await this.ctx.storage.put('envSignature', current);
     return super.fetch(request);
   }
 }
