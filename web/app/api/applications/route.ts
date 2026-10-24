@@ -6,6 +6,7 @@ import { isDivision, type Effort } from '@/lib/policy';
 import { readJson } from '@/lib/request';
 import { submitApplication } from '@/lib/runner';
 import { getApplication, mutateApplication } from '@/lib/store';
+import { audited } from '@/lib/audited';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +16,7 @@ const EFFORTS = ['low', 'medium', 'high'];
  * 채용 페이지 지원. 새 지원서나 같은 이름으로 떨어진 지원서의 새 버전이면 서류전형을 대기열에 넣는다 (티켓 1장).
  * 같은 분기·체급에 이미 낸 .md 면 그 지원서를 돌려준다. 무제한급 지원자 키는 저장하지 않는다.
  */
-export async function POST(req: Request) {
+async function handlePOST(req: Request) {
   const auth = await requireViewer();
   if ('error' in auth) return auth.error;
   const { body, error } = await readJson<{ md?: unknown; agentName?: unknown; character?: unknown; division?: unknown; effort?: unknown; apiKey?: unknown }>(req);
@@ -42,3 +43,5 @@ export async function POST(req: Request) {
   }
   return NextResponse.json({ id: submitted.id, reused: submitted.reused });
 }
+
+export const POST = audited('application_submit', handlePOST);
