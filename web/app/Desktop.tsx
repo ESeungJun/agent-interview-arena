@@ -8,7 +8,7 @@ import Hall from './Hall';
 import Login from './Login';
 import { MiniDoors } from './pixel/Corridor';
 import { BASE, pixel, px, type Challenge } from './pixel/cast';
-import type { DivisionInfo, LoginMode } from './types';
+import type { DivisionInfo, LoginMode, SupabasePublic } from './types';
 
 type WindowKey = 'browser' | 'history' | 'trash' | 'hall';
 
@@ -36,8 +36,8 @@ export type HistoryItem = {
 };
 
 /** 홈 = 내 컴퓨터 바탕화면. 채용 포스터 브라우저 창을 열어 둔 채로 시작하고, 지난 지원 이력·명예의 전당·휴지통은 아이콘으로 연다 */
-export default function Desktop({ viewer, loginMode, history, revisable, divisions, interviewer }: {
-  viewer: { name: string } | null; loginMode: LoginMode;
+export default function Desktop({ viewer, loginMode, supabase, history, revisable, divisions, interviewer }: {
+  viewer: { name: string } | null; loginMode: LoginMode; supabase?: SupabasePublic;
   history: HistoryItem[]; revisable: Revisable[]; divisions: DivisionInfo[]; interviewer: string;
 }) {
   const router = useRouter();
@@ -229,7 +229,7 @@ export default function Desktop({ viewer, loginMode, history, revisable, divisio
                   <dt>티켓</dt><dd>새 .md 를 낼 때 1장 · {divisions.map(d => `${d.label} 하루 ${d.ticketsPerDay}장${d.byok ? '(내 API 키)' : ''}`).join(' · ')}</dd>
                   <dt>재도전</dt><dd>떨어진 단계는 .md 를 고쳐 서류부터 · 통과해서 얻은 도전은 티켓을 쓰지 않아요</dd>
                 </dl>
-                {viewer ? <ApplyForm revisable={revisable} divisions={divisions} /> : <Login mode={loginMode} />}
+                {viewer ? <ApplyForm revisable={revisable} divisions={divisions} /> : <Login mode={loginMode} supabase={supabase} />}
               </div>
             </div>
           </div>

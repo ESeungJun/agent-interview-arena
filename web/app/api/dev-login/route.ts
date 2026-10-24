@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { cleanNickname, DEV_COOKIE, devLoginEnabled } from '@/lib/auth';
+import { cleanNickname, DEV_COOKIE, devLoginEnabled, ensureAccount } from '@/lib/auth';
 import { fail } from '@/lib/http';
 import { readJson } from '@/lib/request';
 import { audited } from '@/lib/audited';
@@ -13,6 +13,7 @@ async function handlePOST(req: Request) {
   if (error) return error;
   const name = cleanNickname(typeof body?.name === 'string' ? body.name : '');
   if (!name) return fail('닉네임을 입력해 주세요 (한글·영문·숫자).', 400);
+  await ensureAccount({ id: `dev:${name}`, name, provider: 'dev' }, { login: true });
   const res = NextResponse.json({ ok: true });
   res.cookies.set(DEV_COOKIE, name, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 30 * 86_400 });
   return res;

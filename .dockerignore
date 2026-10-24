@@ -1,0 +1,12 @@
+.git
+**/node_modules
+web/.next
+web/.data
+cloudflare/.wrangler
+results
+exams
+calibration
+.env
+.env.*
+**/.env
+**/.env.*

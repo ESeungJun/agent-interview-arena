@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "agent-interview-arena",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-24",
+  "observability": { "enabled": true },
+  // 저장소 루트의 Dockerfile 로 웹 이미지를 만든다 (core/·prompts/ 가 루트에 있다)
+  "containers": [
+    {
+      "class_name": "Arena",
+      "image": "../Dockerfile",
+      "image_build_context": "..",
+      "instance_type": "basic",
+      "max_instances": 1,
+      // 기본은 첫 요청에 가까운 곳에 뜬다. DB(서울)와 멀어지지 않게 아시아 안으로 묶는다
+      "constraints": { "regions": ["APAC"] }
+    }
+  ],
+  // 그림 같은 정적 파일은 컨테이너를 거치지 않고 엣지에서 바로 내보낸다. 없는 경로만 Worker(→ 컨테이너)로 간다
+  "assets": { "directory": "../web/public" },
+  "durable_objects": { "bindings": [{ "name": "ARENA", "class_name": "Arena" }] },
+  "exports": { "Arena": { "type": "durable-object", "storage": "sqlite" } },
+  // 꺼진 컨테이너를 다시 깨운다
+  "triggers": { "crons": ["* * * * *"] },
+  // 비밀이 아닌 값. 비밀값은 `wrangler secret put` 으로 넣는다 (README 배포 절)
+  "vars": {
+    "NEXT_PUBLIC_SUPABASE_URL": "https://vhjufracaobhatylmcsg.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_l_5tSoqAZ8Wepxyxz4gZwA_eqUAwgKl"
+  }
+}

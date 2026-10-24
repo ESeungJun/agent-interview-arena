@@ -1,12 +1,13 @@
 /**
- * 누가 보고 있는지. 운영은 Supabase Auth(GitHub 로그인) 세션 쿠키에서, 로컬 개발은 개발용 닉네임 쿠키에서 읽는다.
+ * 누가 보고 있는지. 운영은 Supabase Auth(Google 로그인) 세션 쿠키에서, 로컬 개발은 개발용 닉네임 쿠키에서 읽는다.
  * 개발용 로그인은 Supabase 설정이 없고 production 이 아닐 때만 켜진다.
  */
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { getDb } from './db.ts';
 
-export type Viewer = { id: string; name: string };
+/** email·provider 는 운영 기록과 운영자 화면에만 쓴다. 공개 화면에는 name 만 나간다 */
+export type Viewer = { id: string; name: string; email?: string; provider?: string };
 
 export const SUPABASE = {
   url: process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
@@ -40,21 +41,21 @@ export async function getViewer(): Promise<Viewer | null> {
     const { data } = await (await supabaseServer()).auth.getUser();
     const user = data.user;
     if (!user) return null;
-    // 표시 이름은 GitHub 이 준 신원 정보에서 읽는다. user_metadata 는 사용자가 직접 고칠 수 있어 남을 사칭할 수 있고,
-    // 이메일은 명예의 전당에 공개되면 안 되므로 쓰지 않는다
-    const github = user.identities?.find(i => i.provider === 'github')?.identity_data as { user_name?: string; preferred_username?: string } | undefined;
-    const name = github?.user_name ?? github?.preferred_username ?? `지원자-${user.id.slice(0, 6)}`;
-    return { id: user.id, name: cleanNickname(name) || `지원자-${user.id.slice(0, 6)}` };
+    // 구글 계정 이름은 실명이라 명예의 전당에 그대로 내보내지 않는다. 이메일도 공개하지 않는다 (운영자 화면에서만 본다)
+    const fallback = `지원자-${user.id.slice(0, 6)}`;
+    return { id: user.id, name: fallback, email: user.email ?? undefined, provider: user.app_metadata?.provider ?? 'google' };
   }
   if (!devLoginEnabled()) return null;
   const nick = cleanNickname((await cookies()).get(DEV_COOKIE)?.value ?? '');
-  return nick ? { id: `dev:${nick}`, name: nick } : null;
+  return nick ? { id: `dev:${nick}`, name: nick, provider: 'dev' } : null;
 }
 
-/** 계정 행을 만들거나 표시 이름을 맞춘다 (지원·리더보드에 쓰인다) */
-export async function ensureAccount(viewer: Viewer): Promise<void> {
+/** 계정 행을 만들거나 맞춘다 (지원·리더보드에 쓰인다). login 이면 마지막 로그인 시각도 남긴다 */
+export async function ensureAccount(viewer: Viewer, opts: { login?: boolean } = {}): Promise<void> {
   await (await getDb()).query(
-    'insert into accounts (id, display_name) values ($1, $2) on conflict (id) do update set display_name = excluded.display_name',
-    [viewer.id, viewer.name],
+    `insert into accounts (id, display_name, email, provider, last_login_at) values ($1, $2, $3, $4, case when $5 then now() end)
+     on conflict (id) do update set display_name = excluded.display_name, email = coalesce(excluded.email, accounts.email),
+       provider = coalesce(excluded.provider, accounts.provider), last_login_at = coalesce(excluded.last_login_at, accounts.last_login_at)`,
+    [viewer.id, viewer.name, viewer.email ?? null, viewer.provider ?? null, Boolean(opts.login)],
   );
 }
