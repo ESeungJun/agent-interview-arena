@@ -63,7 +63,28 @@ npm run lint
 
 마이그레이션은 서버가 뜰 때 잠금(`pg_advisory_xact_lock`)을 잡고 적용해 여러 대가 동시에 떠도 한 번만 돈다.
 
-## 운영 기록 (D-44)
+## Cloudflare 배포 (D-45)
+
+운영은 Cloudflare Containers 에 올린다. 앞단 Worker(`cloudflare/`)가 모든 요청을 컨테이너 하나(저장소 루트 `Dockerfile` 로 만든 이 웹)로 넘긴다.
+면접 워커가 컨테이너 안에서 몇 분씩 돌아서 쉬는 시간이 지나도 컨테이너를 끄지 않고, 꺼지면 1분마다 도는 크론이 다시 깨운다.
+
+```bash
+git submodule update --init            # 면접관 프롬프트(비공개)가 이미지에 들어간다
+cd cloudflare && npm install
+npx wrangler login
+# 비밀값 (한 번만, 바꿀 때 다시)
+npx wrangler secret put ANTHROPIC_API_KEY
+npx wrangler secret put DATABASE_URL        # Supabase Session pooler(5432) 연결 문자열
+npx wrangler secret put DATABASE_CA_CERT
+npx wrangler secret put SITE_URL            # 예: https://agent-interview-arena.<계정>.workers.dev
+openssl rand -base64 32 | npx wrangler secret put ARENA_BYOK_SECRET
+openssl rand -base64 32 | npx wrangler secret put ARENA_EXAM_SECRET   # 분기 중간에 바꾸지 않는다
+npx wrangler deploy                    # Docker 가 켜져 있어야 이미지를 빌드한다
+```
+
+Supabase URL·공개 키는 비밀이 아니라 `cloudflare/wrangler.jsonc` 의 `vars` 에 있다. 로컬 개발(`npm run dev`)은 이 값들 없이 localhost 에서 PGlite 와 개발용 로그인으로 돈다.
+
+
 
 두 표 모두 덧붙이기만 한다. 지원서 문서(`applications.doc`)는 다시 시도하면 단계 기록을 덮어써서 따로 남긴다. 지원자 키는 가리고, 요청 본문·쿠키는 남기지 않는다.
 
