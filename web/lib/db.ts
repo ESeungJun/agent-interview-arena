@@ -21,10 +21,15 @@ const MIGRATIONS = path.join(process.cwd(), 'supabase', 'migrations');
 async function postgres(url: string): Promise<Db> {
   const { default: pg } = await import('pg');
   const local = /@(localhost|127\.0\.0\.1)[:/]/.test(url);
-  // Supabase CA 인증서(PEM)를 DATABASE_CA_CERT 로 주면 서버 인증서를 검증한다. 없으면 암호화만 하고 검증은 하지 않는다 (README 배포 절 참고)
+  // Supabase CA 인증서(PEM)를 DATABASE_CA_CERT 로 주면 서버 인증서를 검증한다 (README 배포 절 참고).
+  // 운영에서 없으면 열지 않는다. 검증 없이 열면 중간에서 DB 연결을 가로챌 수 있다. 개발에서는 암호화만 한다
   const ca = process.env.DATABASE_CA_CERT;
+  if (!local && !ca && process.env.NODE_ENV === 'production') throw new Error('DATABASE_CA_CERT 가 없습니다');
   const ssl = local ? undefined : ca ? { ca, rejectUnauthorized: true } : { rejectUnauthorized: false };
-  const pool = new pg.Pool({ connectionString: url, max: 5, ssl });
+  // DB 가 컨테이너와 다른 지역에 있어 새 연결 하나에 0.6초쯤 든다 (TCP·TLS·인증 왕복). 쉬는 연결을 닫지 않고 붙들어 둔다
+  const pool = new pg.Pool({ connectionString: url, max: 5, ssl, idleTimeoutMillis: 0, keepAlive: true });
+  // 끊긴 연결은 풀이 버리고 다음 요청에서 새로 연다. 오류 이벤트를 받지 않으면 프로세스가 죽는다
+  pool.on('error', e => console.error('[db] 쉬는 연결 오류:', e.message));
   return {
     kind: 'postgres',
     query: async (text, params) => (await pool.query(text, params)).rows,

@@ -1,14 +1,15 @@
 import Link from 'next/link';
 import { getViewer } from '@/lib/auth';
 import { DIVISIONS, GATE } from '@/lib/policy';
-import { freeR1UsedToday, passBalance, passHistory } from '@/lib/runner';
+import { accountCounts, passHistory } from '@/lib/runner';
 import Shop from './Shop';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: '관문권 상점' };
 
 /** 돌아갈 곳은 이 사이트 안의 경로만 받는다 (다른 사이트로 보내는 링크로 쓰이지 않게) */
-const safeReturn = (v: string | string[] | undefined) => (typeof v === 'string' && /^\/(?!\/)/.test(v) ? v : '/');
+// 백슬래시·제어 문자도 막는다. 브라우저는 /\evil.com 이나 /<탭>/evil.com 을 //evil.com 으로 읽는다
+const safeReturn = (v: string | string[] | undefined) => (typeof v === 'string' && /^\/(?![/\\])[^\\\x00-\x1f\x7f]*$/.test(v) ? v : '/');
 
 /** 날짜는 서버에서 한 번만 쓴다 (서버와 브라우저의 날짜 표기가 달라 화면이 어긋나지 않게) */
 const when = (iso: string) => new Date(iso).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -18,7 +19,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   const back = safeReturn((await searchParams).from);
   const viewer = await getViewer();
   const wallet = viewer
-    ? await Promise.all([passBalance(viewer.id), freeR1UsedToday(viewer.id), passHistory(viewer.id)]).then(([balance, freeR1Used, history]) => ({
+    ? await Promise.all([accountCounts(viewer.id), passHistory(viewer.id)]).then(([{ balance, freeR1Used }, history]) => ({
         balance, freeR1Left: Math.max(0, GATE.freeR1PerDay - freeR1Used), history: history.map(h => ({ ...h, when: when(h.at) })),
       }))
     : null;

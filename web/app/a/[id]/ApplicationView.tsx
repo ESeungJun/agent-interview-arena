@@ -80,6 +80,8 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
 
   /** 화면 데이터의 순번. 결과 열기·도전 응답으로 화면을 바꾸면 그보다 먼저 나간 조회 응답은 버린다 (늦게 도착해 열기 전 데이터로 덮지 않게) */
   const seq = useRef(0);
+  /** 결과 통지서가 열려 있는 동안 참. 그동안 들어온 조회 응답으로 뒤 화면을 바꾸지 않는다 (도장 전에 문이 열리지 않게) */
+  const holding = useRef(false);
   const apply = useCallback((data: Application) => {
     seq.current++;
     setApp(data);
@@ -89,7 +91,7 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
     const res = await fetch(`${BASE}/api/applications/${id}`, { cache: 'no-store' });
     const body = await res.json();
     if (!res.ok) throw Object.assign(new Error(body.error ?? `조회 실패 (${res.status})`), { status: res.status });
-    if (mine === seq.current) setApp(body);
+    if (mine === seq.current && !holding.current) setApp(body);
     return body as Application;
   }, [id]);
 
@@ -203,6 +205,9 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `결과를 열지 못했습니다 (${res.status})`);
+      // 먼저 나간 조회 응답도 버린다
+      seq.current++;
+      holding.current = true;
       setRevealed(data);
       setLetter({ stage, mode: 'reveal' });
     } catch (e) {
@@ -355,6 +360,7 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
           mode={letter.mode}
           onClose={() => {
             // 통지서를 닫은 뒤에야 뒤 화면을 연 결과로 바꾼다 (그때 문이 열리고 캐릭터가 움직인다)
+            holding.current = false;
             if (revealed) apply(revealed);
             setRevealed(null);
             setLetter(null);

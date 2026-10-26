@@ -24,7 +24,8 @@ export type Context = {
   log: (msg: string) => void;
   usage: { interviewer: Usage; candidate: Usage };
 };
-type Usage = { inputTokens: number; outputTokens: number; cacheReadTokens: number; costUsd: number; calls: number };
+/** costUsd 는 가격을 모르는 모델이 한 번이라도 섞이면 null 이다 (0 으로 적으면 비용 합계가 조용히 줄어든다) */
+type Usage = { inputTokens: number; outputTokens: number; cacheReadTokens: number; costUsd: number | null; calls: number };
 
 export type StageOutcome = { passed: boolean; securityBan?: { rule: string; reason: string; evidence?: string | null } };
 
@@ -33,7 +34,7 @@ function track(ctx: Context, who: "interviewer" | "candidate", r: ConverseResult
   u.inputTokens += r.usage.inputTokens;
   u.outputTokens += r.usage.outputTokens;
   u.cacheReadTokens += r.usage.cacheReadTokens;
-  u.costUsd += r.usage.costUsd ?? 0;
+  u.costUsd = u.costUsd === null || r.usage.costUsd === null ? null : u.costUsd + r.usage.costUsd;
   u.calls += r.turns.length;
 }
 

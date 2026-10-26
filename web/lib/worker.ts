@@ -14,7 +14,7 @@ import { getDb } from './db.ts';
 import { arenaLlm } from './llm.ts';
 import { DIVISIONS, INTERVIEWER, LIMITS } from './policy.ts';
 import { securityBanOf } from './runner.ts';
-import { examStore, getApplication, mutateApplication, mutateAttempt } from './store.ts';
+import { appendLogs, examStore, getApplication, mutateApplication, mutateAttempt } from './store.ts';
 
 /** 공격 편성 시드용 비밀값. 운영은 필수다. 없으면 시드를 계산할 수 있어 쉬운 편성을 골라 낼 수 있다 (core/exam.ts). */
 function examSecret(): string | undefined {
@@ -147,7 +147,7 @@ async function run(job: Job): Promise<void> {
     pending = [];
     // 로그 쓰기가 한 번 실패해도 이후 쓰기와 결과 저장을 막지 않는다 (로그는 진행 표시용이다)
     flushing = flushing
-      .then(() => mutateAttempt(id, n, challenge, a => ({ ...a, logs: [...a.logs, ...lines] })))
+      .then(() => appendLogs(id, n, challenge, lines))
       .catch(e => console.error('[worker] 진행 로그 저장 실패:', maskKeys(e instanceof Error ? e.message : String(e))));
     return flushing;
   };

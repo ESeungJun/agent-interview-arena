@@ -154,46 +154,60 @@ export async function freeR1UsedToday(accountId: string, q?: Query): Promise<num
   return Number(n);
 }
 
-/** 서류 다음 관문을 열 때 내는 것. 이미 낸 관문(서버 오류 뒤 다시 시도)이면 none */
-type GateCharge = { kind: 'none' } | { kind: 'free'; ticketId: number } | { kind: 'pass'; passes: number };
+/** 화면에 보여 줄 계정 수치: 오늘 쓴 서류 티켓(체급별)·무료 1차, 관문권 잔액 */
+export type AccountCounts = { docUsed: Record<Division, number>; freeR1Used: number; balance: number };
 
-/** 1차는 하루 무료 횟수 안이면 무료 티켓, 그 밖에는 관문권을 쓴다. 계정 행을 잠가 마지막 한 장을 두 요청이 같이 쓰지 못하게 한다 */
-async function chargeGate(app: Application, challenge: Exclude<Challenge, 'doc'>): Promise<GateCharge | Fail> {
-  const v = currentVersion(app).n;
-  return (await getDb()).tx(async q => {
-    await q('select id from accounts where id = $1 for update', [app.ownerId]);
-    const gate = [app.id, v, challenge];
-    const [free] = await q('select 1 from tickets where application_id = $1 and version = $2 and challenge = $3', gate);
-    const [{ paid }] = await q<{ paid: string | number | null }>(
-      'select coalesce(sum(delta), 0) as paid from pass_ledger where application_id = $1 and version = $2 and challenge = $3', gate);
-    if (free || Number(paid) < 0) return { kind: 'none' as const };
-    if (challenge === 'r1' && (await freeR1UsedToday(app.ownerId, q)) < GATE.freeR1PerDay) {
-      const [row] = await q<{ id: number }>("insert into tickets (account_id, division, application_id, version, challenge) values ($1, $2, $3, $4, 'r1') returning id", [
-        app.ownerId, app.division, app.id, v,
-      ]);
-      return { kind: 'free' as const, ticketId: Number(row.id) };
-    }
-    const passes = DIVISIONS[app.division].passesPerGate;
-    const balance = await passBalance(app.ownerId, q);
-    if (balance < passes) {
-      return { ok: false, status: 402, message: `${STAGE_NAMES[challenge]}에는 관문권 ${passes}장이 필요합니다 (보유 ${balance}장). 관문권 결제는 준비 중입니다.` } as Fail;
-    }
-    await q("insert into pass_ledger (account_id, delta, reason, application_id, version, challenge) values ($1, $2, 'use', $3, $4, $5)", [
-      app.ownerId, -passes, ...gate,
-    ]);
-    return { kind: 'pass' as const, passes };
-  });
+/**
+ * AccountCounts 를 세는 SQL 조각. 지원서 조회·결과 열기 같은 다른 문장에 붙여 왕복 한 번에 함께 읽는다
+ * (DB 가 컨테이너와 다른 지역에 있어 왕복 한 번이 0.1초 넘게 든다). owner·day 는 그 문장의 SQL 식이다
+ */
+export const countsSql = (owner: string, day: string) => `
+  (select coalesce(jsonb_object_agg(division, n), '{}'::jsonb) from (
+     select division, count(*) as n from tickets where account_id = ${owner} and challenge = 'doc' and used_at >= ${day} group by division) t) as doc_used,
+  (select count(*) from tickets where account_id = ${owner} and challenge = 'r1' and used_at >= ${day}) as r1_used,
+  (select coalesce(sum(delta), 0) from pass_ledger where account_id = ${owner}) as balance`;
+
+export type CountsRow = { doc_used: Partial<Record<Division, string | number>>; r1_used: string | number; balance: string | number | null };
+
+export function toCounts(r: CountsRow): AccountCounts {
+  const docUsed: Record<Division, number> = { light: 0, middle: 0, open: 0 };
+  for (const [d, n] of Object.entries(r.doc_used ?? {})) docUsed[d as Division] = Number(n);
+  return { docUsed, freeR1Used: Number(r.r1_used), balance: Number(r.balance ?? 0) };
 }
 
-/** 접수하지 못한 관문의 무료 1차·관문권을 돌려준다 */
-async function refundGate(app: Application, challenge: Challenge, charge: GateCharge): Promise<void> {
-  const db = await getDb();
-  if (charge.kind === 'free') await db.query('delete from tickets where id = $1', [charge.ticketId]);
-  if (charge.kind === 'pass') {
-    await db.query("insert into pass_ledger (account_id, delta, reason, application_id, version, challenge) values ($1, $2, 'refund', $3, $4, $5)", [
-      app.ownerId, charge.passes, app.id, currentVersion(app).n, challenge,
-    ]);
-  }
+export async function accountCounts(accountId: string): Promise<AccountCounts> {
+  const [row] = await (await getDb()).query<CountsRow>(`select ${countsSql('$1', '$2')}`, [accountId, startOfTodayKst()]);
+  return toCounts(row);
+}
+
+const UUID = /^[0-9a-f-]{36}$/i;
+
+/** 본인 지원서와 계정 수치를 한 번에 읽는다. 남의 지원서면 undefined */
+export async function ownedApplication(id: string, ownerId: string): Promise<{ app: Application; counts: AccountCounts } | undefined> {
+  if (!UUID.test(id)) return undefined;
+  const [row] = await (await getDb()).query<CountsRow & { doc: Application }>(
+    `select a.doc, ${countsSql('a.owner_id', '$3')} from applications a where a.id = $1 and a.owner_id = $2`,
+    [id, ownerId, startOfTodayKst()],
+  );
+  return row && { app: row.doc, counts: toCounts(row) };
+}
+
+/**
+ * 결과 통지서를 열었다고 기록하고, 연 뒤의 지원서와 계정 수치를 돌려준다. 문장 하나로 끝낸다 (잠그고 읽고 쓰는 왕복을 줄인다).
+ * 이미 열었으면 처음 연 시각을 둔다. 끝나지 않은 단계거나 남의 지원서면 undefined
+ */
+export async function revealAttempt(id: string, ownerId: string, challenge: Challenge): Promise<{ app: Application; counts: AccountCounts } | undefined> {
+  if (!UUID.test(id)) return undefined;
+  const [row] = await (await getDb()).query<CountsRow & { doc: Application }>(
+    `update applications a
+     set doc = jsonb_set(a.doc, array['versions', (jsonb_array_length(a.doc->'versions') - 1)::text, 'attempts', $3::text, 'revealedAt'],
+                         coalesce(a.doc->'versions'-> -1->'attempts'->$3::text->'revealedAt', to_jsonb($4::text))),
+         updated_at = now()
+     where a.id = $1 and a.owner_id = $2 and a.doc->'versions'-> -1->'attempts'->$3::text->>'status' = 'done'
+     returning a.doc, ${countsSql('a.owner_id', '$5')}`,
+    [id, ownerId, challenge, new Date().toISOString(), startOfTodayKst()],
+  );
+  return row && { app: row.doc, counts: toCounts(row) };
 }
 
 /** 서버 오류로 끝난 단계를 티켓 없이 다시 시도할 수 있는 횟수 (같은 버전·단계) */
@@ -340,68 +354,92 @@ export async function reviseApplication(
   return { ok: true, n };
 }
 
-async function activeJobs(q: Query, ownerId: string): Promise<{ mine: number; all: number }> {
-  const [row] = await q<{ mine: string | number; all: string | number }>(
-    'select count(*) filter (where a.owner_id = $1) as mine, count(*) as all from jobs j join applications a on a.id = j.application_id',
-    [ownerId],
-  );
-  return { mine: Number(row.mine), all: Number(row.all) };
-}
+type Reserved = { ok: true; n: number; app: Application; counts: AccountCounts };
 
 /**
  * 지금 버전의 한 단계 도전을 대기열에 넣는다. 확인과 기록을 지원서 행 잠금 안에서 해 같은 단계가 두 번 들어가지 않는다.
- * 무제한급은 지원자 키를 암호화해 대기열 행에 함께 둔다.
+ * 서류 다음 관문은 무료 1차·관문권(D-48)도 같은 트랜잭션에서 낸다. 접수에 실패하면 함께 되돌아가 따로 돌려줄 것이 없다
+ * (나눠 하면 동시에 들어온 다른 요청이 "이미 낸 관문"으로 보고 지나간 뒤 돌려받는 틈이 생긴다).
+ * ownerId 를 주면 본인 지원서일 때만 접수한다. 무제한급은 지원자 키를 암호화해 대기열 행에 함께 둔다.
  */
-export async function reserveChallenge(id: string, challenge: Challenge, byokKey?: string): Promise<{ ok: true; n: number } | Fail> {
-  const result = await mutateApplication(id, async (app, q): Promise<{ ok: true; n: number } | Fail> => {
+export async function reserveChallenge(id: string, challenge: Challenge, byokKey?: string, ownerId?: string): Promise<Reserved | Fail> {
+  const notFound: Fail = { ok: false, status: 404, message: '지원서가 없습니다.' };
+  if (!UUID.test(id)) return notFound;
+  const result = await (await getDb()).tx(async (q): Promise<Reserved | Fail> => {
+    const [row] = await q<{ doc: Application }>(
+      `select doc from applications where id = $1${ownerId ? ' and owner_id = $2' : ''} for update`, ownerId ? [id, ownerId] : [id]);
+    const app = row?.doc;
+    if (!app) return notFound;
     if (app.trashedAt) return { ok: false, status: 403, message: '휴지통에 있는 지원서입니다. 복원한 뒤 도전해 주세요.' };
     const { running, next } = challengeState(app);
     if (running) return { ok: false, status: 409, message: `${STAGE_NAMES[running]}이 진행 중입니다.` };
     if (next !== challenge) {
       return { ok: false, status: 403, message: next ? `지금 도전할 수 있는 단계는 ${STAGE_NAMES[next]}입니다.` : '지금 버전으로 더 도전할 단계가 없습니다.' };
     }
-    if (DIVISIONS[app.division].byok && !byokKey) return { ok: false, status: 400, message: '무제한급은 도전할 때마다 지원자 API 키가 필요합니다.' };
+    const division = DIVISIONS[app.division];
+    if (division.byok && !byokKey) return { ok: false, status: 400, message: '무제한급은 도전할 때마다 지원자 API 키가 필요합니다.' };
     const v = currentVersion(app);
     const prev = v.attempts[challenge];
-    // 서류전형은 이 버전에 쓴 티켓이 있어야 한다 (서버 오류 뒤 다시 시도할 때도 같은 티켓을 쓴다)
-    if (challenge === 'doc' && (await q("select 1 from tickets where application_id = $1 and version = $2 and challenge = 'doc'", [app.id, v.n])).length === 0) {
-      return { ok: false, status: 403, message: '이 버전에 쓴 티켓이 없습니다. 고친 .md 를 새로 내 주세요.' };
-    }
     if (prev?.status === 'error' && (prev.errors ?? 0) >= MAX_ERROR_RETRIES) {
       return { ok: false, status: 429, message: `서버 오류가 ${MAX_ERROR_RETRIES}번 이어졌습니다. 운영자가 확인할 때까지 이 단계를 다시 시도할 수 없습니다.` };
     }
-    // 계정 행과 대기열 잠금을 잡고 센다. 같은 계정의 다른 지원서로 동시에 들어온 요청이 상한을 함께 넘지 않게
-    await q('select id from accounts where id = $1 for update', [app.ownerId]);
+    // 대기열 잠금을 잡은 뒤에 센다. 다른 지원서로 동시에 들어온 요청이 동시 상한·무료 1차·관문권 잔액을 함께 넘지 않게
     await q('select pg_advisory_xact_lock($1)', [QUEUE_LOCK]);
-    const active = await activeJobs(q, app.ownerId);
-    if (active.mine >= LIMITS.concurrent) return { ok: false, status: 429, message: `면접은 계정당 동시에 ${LIMITS.concurrent}개까지 진행할 수 있습니다.` };
-    if (active.all >= LIMITS.queue) return { ok: false, status: 503, message: '지금 면접장이 붐빕니다. 잠시 뒤 다시 시도해 주세요.' };
+    const [c] = await q<CountsRow & { mine: string | number; all_jobs: string | number; doc_ticket: boolean; gate_free: boolean; gate_paid: string | number }>(
+      `select
+         (select count(*) from jobs j join applications a on a.id = j.application_id where a.owner_id = $1) as mine,
+         (select count(*) from jobs j join applications a on a.id = j.application_id) as all_jobs,
+         exists (select 1 from tickets where application_id = $2 and version = $3 and challenge = 'doc') as doc_ticket,
+         exists (select 1 from tickets where application_id = $2 and version = $3 and challenge = $4) as gate_free,
+         (select coalesce(sum(delta), 0) from pass_ledger where application_id = $2 and version = $3 and challenge = $4) as gate_paid,
+         ${countsSql('$1', '$5')}`,
+      [app.ownerId, app.id, v.n, challenge, startOfTodayKst()],
+    );
+    // 서류전형은 이 버전에 쓴 티켓이 있어야 한다 (서버 오류 뒤 다시 시도할 때도 같은 티켓을 쓴다)
+    if (challenge === 'doc' && !c.doc_ticket) return { ok: false, status: 403, message: '이 버전에 쓴 티켓이 없습니다. 고친 .md 를 새로 내 주세요.' };
+    if (Number(c.mine) >= LIMITS.concurrent) return { ok: false, status: 429, message: `면접은 계정당 동시에 ${LIMITS.concurrent}개까지 진행할 수 있습니다.` };
+    if (Number(c.all_jobs) >= LIMITS.queue) return { ok: false, status: 503, message: '지금 면접장이 붐빕니다. 잠시 뒤 다시 시도해 주세요.' };
+    const counts = toCounts(c);
+    // 서류 다음 관문: 이미 낸 관문(서버 오류 뒤 다시 시도)이면 더 내지 않는다. 1차는 하루 무료 횟수 안이면 무료, 그 밖에는 관문권
+    let free = false;
+    let passes = 0;
+    if (GATE.required && challenge !== 'doc' && !c.gate_free && Number(c.gate_paid) >= 0) {
+      if (challenge === 'r1' && counts.freeR1Used < GATE.freeR1PerDay) free = true;
+      else passes = division.passesPerGate;
+      if (passes > counts.balance) {
+        return { ok: false, status: 402, message: `${STAGE_NAMES[challenge]}에는 관문권 ${passes}장이 필요합니다 (보유 ${counts.balance}장). 관문권 결제는 준비 중입니다.` };
+      }
+    }
     v.attempts[challenge] = { status: 'queued', logs: [], startedAt: new Date().toISOString(), errors: prev?.errors };
-    await q('insert into jobs (application_id, version, challenge, byok_cipher) values ($1, $2, $3, $4)', [
-      app.id, v.n, challenge, byokKey ? sealKey(byokKey) : null,
-    ]);
-    return { ok: true, n: v.n };
+    // 대기열·무료 1차·관문권 기록과 지원서 갱신을 문장 하나로 쓴다
+    await q(
+      `with job as (insert into jobs (application_id, version, challenge, byok_cipher) values ($1, $2, $3, $4)),
+       free as (insert into tickets (account_id, division, application_id, version, challenge) select $5, $6, $1, $2, $3 where $7::boolean),
+       paid as (insert into pass_ledger (account_id, delta, reason, application_id, version, challenge) select $5, -$8::int, 'use', $1, $2, $3 where $8::int > 0)
+       update applications set doc = $9, updated_at = now() where id = $1`,
+      [app.id, v.n, challenge, byokKey ? sealKey(byokKey) : null, app.ownerId, app.division, free, passes, app],
+    );
+    if (free) counts.freeR1Used++;
+    counts.balance -= passes;
+    return { ok: true, n: v.n, app, counts };
   });
-  if (!result) return { ok: false, status: 404, message: '지원서가 없습니다.' };
   if (result.ok) void import('./worker.ts').then(w => w.kickWorker());
   return result;
 }
 
-/** 다음 단계 도전. 1차는 하루 무료 횟수 안에서 무료, 그 밖의 관문은 관문권을 쓴다 (D-48). 접수하지 못하면 돌려준다 */
-export async function startChallenge(app: Application, challenge: Challenge, byokKey?: string): Promise<{ ok: true; n: number } | Fail> {
-  const division = DIVISIONS[app.division];
-  if (division.byok) {
-    const bad = await checkKey(app.ownerId, byokKey, division.engine);
-    if (bad) return bad;
+/** 다음 단계 도전 (본인 지원서만). 1차는 하루 무료 횟수 안에서 무료, 그 밖의 관문은 관문권을 쓴다 (D-48) */
+export async function startChallenge(id: string, ownerId: string, challenge: Challenge, byokKey?: string): Promise<Reserved | Fail> {
+  // 지원자 키를 받는 체급이 열려 있을 때만 미리 읽어 키를 확인한다 (외부 호출이라 행을 잠근 채 하지 않는다)
+  if (Object.values(DIVISIONS).some(d => d.byok)) {
+    const owned = await ownedApplication(id, ownerId);
+    if (!owned) return { ok: false, status: 404, message: '지원서가 없습니다.' };
+    const division = DIVISIONS[owned.app.division];
+    if (division.byok) {
+      const bad = await checkKey(ownerId, byokKey, division.engine);
+      if (bad) return bad;
+    }
   }
-  // 도전할 수 없는 단계면 관문권을 잡기 전에 막는다 (잡았다 돌려주는 기록을 남기지 않게)
-  const { running, next } = challengeState(app);
-  if (!GATE.required || challenge === 'doc' || running || next !== challenge) return reserveChallenge(app.id, challenge, byokKey);
-  const charge = await chargeGate(app, challenge);
-  if ('ok' in charge) return charge;
-  const reserved = await reserveChallenge(app.id, challenge, byokKey);
-  if (!reserved.ok) await refundGate(app, challenge, charge);
-  return reserved;
+  return reserveChallenge(id, challenge, byokKey, ownerId);
 }
 
 /** 휴지통으로 옮기거나 되돌린다. 면접이 진행 중인 지원서는 옮기지 않는다 */
