@@ -19,7 +19,7 @@ export const DIVISIONS: Record<Division, {
   label: string; engine: ModelAlias; ticketsPerDay: number;
   /** 유료 관문 하나에 쓰는 관문권 수 (지원자 엔진 원가에 따라) */
   passesPerGate: number;
-  /** 지원자가 고를 수 있는 추론 강도. 비어 있으면 엔진 기본값으로 돈다 */
+  /** 지원자가 고를 수 있는 추론 강도. 비어 있으면 고르는 칸이 없고 엔진 기본값으로 돈다 (지금은 모든 체급이 비어 있다, D-50) */
   efforts: Effort[];
   byok: boolean;
   open: boolean;
@@ -27,8 +27,8 @@ export const DIVISIONS: Record<Division, {
   closedReason?: string;
 }> = {
   light: { label: '경량급', engine: 'haiku', ticketsPerDay: num(process.env.ARENA_TICKETS_LIGHT, 3), passesPerGate: 1, efforts: [], byok: false, open: true },
-  middle: { label: '중량급', engine: 'sonnet', ticketsPerDay: num(process.env.ARENA_TICKETS_MIDDLE, 3), passesPerGate: 1, efforts: ['low', 'medium'], byok: false, open: true },
-  open: { label: '무제한급', engine: 'opus', ticketsPerDay: num(process.env.ARENA_TICKETS_OPEN, 3), passesPerGate: 2, efforts: ['low', 'medium', 'high'], byok: false, open: true },
+  middle: { label: '중량급', engine: 'sonnet', ticketsPerDay: num(process.env.ARENA_TICKETS_MIDDLE, 3), passesPerGate: 1, efforts: [], byok: false, open: true },
+  open: { label: '무제한급', engine: 'opus', ticketsPerDay: num(process.env.ARENA_TICKETS_OPEN, 3), passesPerGate: 2, efforts: [], byok: false, open: true },
 };
 
 export const isDivision = (v: unknown): v is Division => v === 'light' || v === 'middle' || v === 'open';
