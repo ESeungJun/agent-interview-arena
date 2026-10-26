@@ -100,6 +100,21 @@ export function majorityVerdicts(ballots: Verdict[][]): { verdicts: Verdict[]; u
   return { verdicts, undecided };
 }
 
+/**
+ * 두 면접관의 판정이 갈린 항목. 한쪽에만 있거나, 한쪽이라도 근거 검증에 실패했거나, 결과가 다르면 갈린 것이다.
+ * 나머지 항목은 이미 과반(3표 중 2표)이라 세 번째 표로 뒤집히지 않는다.
+ */
+export function disputedItems(a: Verdict[], b: Verdict[]): Verdict[] {
+  const keyOf = (v: Verdict) => `${v.target ?? ""}\u0000${v.id}`;
+  const other = new Map(b.map(v => [keyOf(v), v]));
+  const mine = new Set(a.map(keyOf));
+  const split = a.filter(v => {
+    const w = other.get(keyOf(v));
+    return !w || v.excluded || w.excluded || v.result !== w.result;
+  });
+  return [...split, ...b.filter(v => !mine.has(keyOf(v)))];
+}
+
 /** 제외된 판정이 이 비율을 넘으면 결과에 "채점 신뢰도 낮음"을 표시한다. */
 export const LOW_CONFIDENCE_RATIO = 0.3;
 

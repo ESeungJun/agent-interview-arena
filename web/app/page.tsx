@@ -1,6 +1,6 @@
 import { auditPage } from '@/lib/audited';
 import { devLoginEnabled, getViewer, SUPABASE, supabaseEnabled } from '@/lib/auth';
-import { DIVISIONS, INTERVIEWER, MODEL_LABEL, type Division } from '@/lib/policy';
+import { DIVISIONS, GATE, INTERVIEWER, MODEL_LABEL, type Division } from '@/lib/policy';
 import { challengeState, sealedChallenge, statusLabel, ticketsUsedToday } from '@/lib/runner';
 import { currentVersion, listByOwner } from '@/lib/store';
 import Desktop, { type HistoryItem } from './Desktop';
@@ -14,8 +14,10 @@ export const metadata = { title: { absolute: '에이전트 채용 · Agent Inter
 export default async function Page() {
   await auditPage('/');
   const viewer = await getViewer();
-  const mine = viewer ? await listByOwner(viewer.id) : [];
-  const used = viewer ? await ticketsUsedToday(viewer.id) : { light: 0, middle: 0, open: 0 };
+  // DB 가 컨테이너와 다른 지역에 있어 왕복 한 번이 비싸다. 서로 기다릴 필요 없는 조회는 함께 보낸다
+  const [mine, used] = viewer
+    ? await Promise.all([listByOwner(viewer.id), ticketsUsedToday(viewer.id)])
+    : [[], { light: 0, middle: 0, open: 0 }];
 
   const history: HistoryItem[] = mine.map(a => {
     const v = currentVersion(a);
@@ -48,5 +50,5 @@ export default async function Page() {
   });
   const loginMode: LoginMode = supabaseEnabled() ? 'supabase' : devLoginEnabled() ? 'dev' : 'none';
 
-  return <Desktop viewer={viewer ? { name: viewer.name } : null} loginMode={loginMode} supabase={loginMode === 'supabase' ? SUPABASE : undefined} history={history} revisable={revisable} divisions={divisions} interviewer={MODEL_LABEL[INTERVIEWER]} />;
+  return <Desktop viewer={viewer ? { name: viewer.name } : null} loginMode={loginMode} supabase={loginMode === 'supabase' ? SUPABASE : undefined} history={history} revisable={revisable} divisions={divisions} interviewer={MODEL_LABEL[INTERVIEWER]} passesRequired={GATE.required} />;
 }
