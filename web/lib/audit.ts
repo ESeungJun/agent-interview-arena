@@ -71,7 +71,9 @@ export type StageRunInput = {
 
 export async function recordStageRun(r: StageRunInput): Promise<void> {
   const done = r.status === 'done' ? r : undefined;
-  const cost = r.usage ? (r.usage.interviewer.costUsd ?? 0) + (r.usage.candidate.costUsd ?? 0) : null;
+  // 가격을 모르는 모델이 섞였으면 비용을 비워 둔다 (0 으로 적지 않는다)
+  const { interviewer, candidate } = r.usage ?? {};
+  const cost = interviewer?.costUsd == null || candidate?.costUsd == null ? null : interviewer.costUsd + candidate.costUsd;
   // jsonb 값은 JSON 문자열로 넘긴다. node-postgres 는 JS 배열을 Postgres 배열 문법으로 바꿔 보내 jsonb 에 넣으면 실패한다
   const json = (v: unknown) => (v === undefined ? null : maskKeys(JSON.stringify(v)));
   try {

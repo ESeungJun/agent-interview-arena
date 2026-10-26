@@ -15,7 +15,7 @@ type Params = { params: Promise<{ id: string }> };
 async function handleGET(_req: Request, { params }: Params) {
   const own = await ownApplication(params);
   if ('error' in own) return own.error;
-  return NextResponse.json(await applicationView(own.app));
+  return NextResponse.json(await applicationView(own.app, own.counts));
 }
 
 /** 떨어진 지원서에 고친 .md 를 붙여 새 버전으로 서류전형부터 다시 본다 (티켓 1장). 파일 이름과 상관없이 이 지원서로 이어진다 */

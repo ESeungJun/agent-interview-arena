@@ -5,7 +5,7 @@
  * - 호스트 재시작 등으로 꺼지면 1분마다 도는 크론이 다시 깨운다. 끊긴 단계는 웹 워커의 정리 작업이 오류로 돌려 다시 시도할 수 있게 한다.
  * - 접속자 IP·원래 주소를 x-forwarded-* 로 넘긴다 (접속 기록, 다른 사이트 요청 차단, 로그인 리디렉션이 쓴다).
  * - 비밀값을 바꾸면(wrangler secret put) 떠 있는 컨테이너는 옛 값을 그대로 쓴다. Durable Object 도 다시 만들어지지 않아 옛 env 를 들고 있으므로,
- *   요청마다 Worker 가 받은 최신 값을 넘기고(sync) 지문이 바뀌었으면 컨테이너를 다시 띄운다.
+ *   Worker 가 받은 최신 값을 넘기고(sync) 지문이 바뀌었으면 컨테이너를 다시 띄운다. 넘기는 것은 isolate 마다 처음 한 번이다.
  */
 import { Container, getContainer } from '@cloudflare/containers';
 
@@ -20,12 +20,16 @@ type Env = {
   ARENA_BYOK_SECRET: string;
   ARENA_EXAM_SECRET: string;
   ARENA_ADMIN_EMAILS?: string;
+  /** 면접관 모델 (haiku·sonnet·opus). 없으면 sonnet (D-49) */
+  ARENA_INTERVIEWER?: string;
+  /** 출제 면접관 모델. 없으면 ARENA_INTERVIEWER (D-49) */
+  ARENA_GENERATOR?: string;
 };
 
 /** 컨테이너에 넘길 변수 (wrangler secret / vars 에서 읽는다) */
 const PASSED = [
   'ANTHROPIC_API_KEY', 'DATABASE_URL', 'DATABASE_CA_CERT', 'NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-  'SITE_URL', 'ARENA_BYOK_SECRET', 'ARENA_EXAM_SECRET', 'ARENA_ADMIN_EMAILS',
+  'SITE_URL', 'ARENA_BYOK_SECRET', 'ARENA_EXAM_SECRET', 'ARENA_ADMIN_EMAILS', 'ARENA_INTERVIEWER', 'ARENA_GENERATOR',
 ] as const;
 
 export class Arena extends Container<Env> {
@@ -69,10 +73,21 @@ async function signature(vars: Record<string, string>): Promise<string> {
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * 이 isolate 가 이미 넘긴 값의 지문. 비밀값을 바꾸면 Worker 새 버전이 떠 isolate 도 새로 생기므로 isolate 마다 처음 한 번만 넘기면 된다.
+ * 요청마다 sync 를 부르면 Durable Object 왕복과 컨테이너 상태 조회로 요청마다 0.2초 넘게 늘었다.
+ */
+let syncedSignature: string | null = null;
+
 /** 웹은 컨테이너 하나로 돈다 (대기열 워커가 한 프로세스에 있다) */
 async function arena(env: Env) {
   const stub = getContainer(env.ARENA, 'main');
-  await stub.sync(containerVars(env));
+  const vars = containerVars(env);
+  const current = await signature(vars);
+  if (current !== syncedSignature) {
+    await stub.sync(vars);
+    syncedSignature = current;
+  }
   return stub;
 }
 

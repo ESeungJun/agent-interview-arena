@@ -9,14 +9,17 @@ import { after } from 'next/server';
 import { PASS_LINE } from '../../core/scoring.ts';
 import { assignCharacter } from './character.ts';
 import { estimateDurations } from './durations.ts';
-import { DIVISIONS, MODEL_LABEL } from './policy.ts';
+import { DIVISIONS, GATE, MODEL_LABEL } from './policy.ts';
 import { publicVersion } from './public-version.ts';
-import { challengeState, ticketsUsedToday } from './runner.ts';
+import { accountCounts, challengeState, type AccountCounts } from './runner.ts';
 import { currentVersion, type Application } from './store.ts';
 
-export async function applicationView(app: Application) {
+/** counts 는 지원서를 읽을 때 함께 읽어 두었으면 넘긴다 (없으면 따로 센다) */
+export async function applicationView(app: Application, counts?: AccountCounts) {
   if (!app.character) after(() => assignCharacter(app.id, currentVersion(app).md));
   const division = DIVISIONS[app.division];
+  // DB 가 컨테이너와 다른 지역에 있어 왕복 한 번이 비싸다. 서로 기다릴 필요 없는 조회는 함께 보낸다
+  const [{ docUsed, freeR1Used, balance }, estimates] = await Promise.all([counts ?? accountCounts(app.ownerId), estimateDurations()]);
   return {
     id: app.id,
     agentName: app.agentName,
@@ -28,11 +31,19 @@ export async function applicationView(app: Application) {
     engineLabel: MODEL_LABEL[division.engine],
     byok: division.byok,
     efforts: division.efforts,
-    tickets: { used: (await ticketsUsedToday(app.ownerId))[app.division], perDay: division.ticketsPerDay },
+    tickets: { used: docUsed[app.division], perDay: division.ticketsPerDay },
+    /** 서류 다음 관문 비용 (D-48): 1차 하루 무료 횟수, 유료 관문 하나에 드는 관문권, 보유 관문권 */
+    gate: {
+      required: GATE.required,
+      freeR1Left: Math.max(0, GATE.freeR1PerDay - freeR1Used),
+      passesPerGate: division.passesPerGate,
+      balance,
+      priceKrw: GATE.priceKrw,
+    },
     versions: app.versions.map(publicVersion),
     ...challengeState(app),
     passLines: PASS_LINE,
-    estimates: await estimateDurations(),
+    estimates,
   };
 }
 

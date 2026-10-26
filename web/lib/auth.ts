@@ -38,12 +38,15 @@ export const cleanNickname = (name: string) => name.replace(/[^\w가-힣.-]/g, '
 
 export async function getViewer(): Promise<Viewer | null> {
   if (supabaseEnabled()) {
-    const { data } = await (await supabaseServer()).auth.getUser();
-    const user = data.user;
-    if (!user) return null;
+    // 토큰 서명을 공개 키(ES256, 한 번 받아 캐시)로 바로 검증한다. getUser 는 요청마다 인증 서버를 다녀와 화면마다 느려졌다
+    const { data } = await (await supabaseServer()).auth.getClaims();
+    const claims = data?.claims;
+    if (!claims?.sub) return null;
     // 구글 계정 이름은 실명이라 명예의 전당에 그대로 내보내지 않는다. 이메일도 공개하지 않는다 (운영자 화면에서만 본다)
-    const fallback = `지원자-${user.id.slice(0, 6)}`;
-    return { id: user.id, name: fallback, email: user.email ?? undefined, provider: user.app_metadata?.provider ?? 'google' };
+    const fallback = `지원자-${claims.sub.slice(0, 6)}`;
+    const provider = (claims.app_metadata as { provider?: string } | undefined)?.provider;
+    // provider 는 서버가 정하는 app_metadata 에서만 읽는다 (운영자 판별에 쓴다). 없으면 모른다고 둔다
+    return { id: claims.sub, name: fallback, email: claims.email ?? undefined, provider: provider ?? 'unknown' };
   }
   if (!devLoginEnabled()) return null;
   const nick = cleanNickname((await cookies()).get(DEV_COOKIE)?.value ?? '');

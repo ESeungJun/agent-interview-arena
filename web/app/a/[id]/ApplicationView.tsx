@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AgentCard, { type AgentMood } from '../../pixel/AgentCard';
 import Backdrop from '../../pixel/Backdrop';
@@ -34,6 +35,8 @@ type Application = {
   division: string; divisionLabel: string; engineLabel: string; byok: boolean; efforts: string[];
   /** 오늘 이 체급에서 쓴 제출 티켓 */
   tickets: { used: number; perDay: number };
+  /** 서류 다음 관문 비용 (lib/view.ts) */
+  gate: { required: boolean; freeR1Left: number; passesPerGate: number; balance: number; priceKrw: number };
   passLines: PassLines;
   estimates?: Record<Challenge, Estimate>;
 };
@@ -70,11 +73,15 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
   const [picked, setPicked] = useState<Challenge | null>(null);
   /** 열려 있는 결과 통지서 */
   const [letter, setLetter] = useState<{ stage: Challenge; mode: 'reveal' | 'view' } | null>(null);
+  /** 방금 연 결과. 통지서를 닫을 때까지 뒤 화면(복도·캐릭터)은 열기 전 상태로 두고, 통지서만 이 결과로 그린다 (도장 전에 문이 열려 결과가 새지 않게) */
+  const [revealed, setRevealed] = useState<Application | null>(null);
   /** 무제한급 도전에 쓸 지원자 키. 화면 메모리에만 두고 보낸 뒤 비운다 */
   const [apiKey, setApiKey] = useState('');
 
   /** 화면 데이터의 순번. 결과 열기·도전 응답으로 화면을 바꾸면 그보다 먼저 나간 조회 응답은 버린다 (늦게 도착해 열기 전 데이터로 덮지 않게) */
   const seq = useRef(0);
+  /** 결과 통지서가 열려 있는 동안 참. 그동안 들어온 조회 응답으로 뒤 화면을 바꾸지 않는다 (도장 전에 문이 열리지 않게) */
+  const holding = useRef(false);
   const apply = useCallback((data: Application) => {
     seq.current++;
     setApp(data);
@@ -84,7 +91,7 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
     const res = await fetch(`${BASE}/api/applications/${id}`, { cache: 'no-store' });
     const body = await res.json();
     if (!res.ok) throw Object.assign(new Error(body.error ?? `조회 실패 (${res.status})`), { status: res.status });
-    if (mine === seq.current) setApp(body);
+    if (mine === seq.current && !holding.current) setApp(body);
     return body as Application;
   }, [id]);
 
@@ -137,6 +144,8 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
 
   if (!app) return <p className={error ? 'error' : 'muted'}>{error ?? '불러오는 중…'}</p>;
   const cur = app.versions[app.versions.length - 1];
+  /** 통지서에 그릴 버전: 방금 연 결과가 있으면 그것, 아니면 지금 화면 */
+  const lv = revealed ? revealed.versions[revealed.versions.length - 1] : cur;
   const r = cur.results;
   const past = app.versions.slice(0, -1).reverse();
   // 결과 통지서를 아직 열지 않은 단계. 열기 전에는 합격·불합격과 그에 따른 다음 단계를 드러내지 않는다
@@ -173,6 +182,17 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
     : canRevise ? (ticketsLeft > 0 ? '고친 .md 로 재도전 가능' : '오늘 티켓 소진 · 내일 재도전 가능')
     : '면접 종료';
 
+  // 서류 다음 관문 비용 (D-48). 서버 오류 뒤 다시 시도는 이미 낸 관문이라 더 쓰지 않는다
+  const { gate } = app;
+  const freeR1 = focus === 'r1' && gate.freeR1Left > 0;
+  const short = gate.required && focus !== 'doc' && !freeR1 && gate.balance < gate.passesPerGate;
+  const gateText = !gate.required ? '서류를 통과해 얻은 도전이라 티켓을 쓰지 않습니다.' : freeR1 ? `오늘 무료 1차가 ${gate.freeR1Left}번 남았습니다. 관문권을 쓰지 않습니다.`
+    : short ? `관문권 ${gate.passesPerGate}장이 필요합니다 (보유 ${gate.balance}장). 관문권 상점을 확인해 주세요.`
+    : `관문권 ${gate.passesPerGate}장을 씁니다 (보유 ${gate.balance}장 · 1장 ${gate.priceKrw.toLocaleString('ko-KR')}원).`;
+
+  // 도전 버튼이 보이는 동안은 오류를 버튼 바로 아래에 띄운다 (맨 위에 띄우면 누른 사람이 못 본다)
+  const tryHere = !banned && (st === 'open-to-try' || st === 'error');
+
   /** 결과 통지서를 연다. 서버가 열었다고 기록한 뒤에야 결과를 내려 주므로, 받은 결과로 통지서를 펴고 도장을 찍는다 */
   async function openSealed(stage: Challenge) {
     setSending(true);
@@ -185,7 +205,10 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `결과를 열지 못했습니다 (${res.status})`);
-      apply(data);
+      // 먼저 나간 조회 응답도 버린다
+      seq.current++;
+      holding.current = true;
+      setRevealed(data);
       setLetter({ stage, mode: 'reveal' });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -198,7 +221,7 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
     <>
       {app.trashedAt && <p className="trash-banner" role="status">휴지통에 있는 지원서입니다. 결과는 볼 수 있지만, 새로 도전하려면 바탕화면 휴지통에서 복원해 주세요.</p>}
       <Backdrop seed={app.id} exclude={app.character ? `${app.character.job}-${app.character.tone}` : undefined} />
-      {error && <p className="error">{error}</p>}
+      {error && !tryHere && <p className="error">{error}</p>}
 
       <div className="stage-area">
         <AgentCard
@@ -243,16 +266,20 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
                 {HINTS[focus]}
                 {app.estimates ? ` 보통 약 ${Math.max(1, Math.round(app.estimates[focus].seconds / 60))}분 걸립니다.` : ''}
               </p>
-              {focus !== 'doc' && <p className="muted small">서류를 통과해 얻은 도전이라 티켓을 쓰지 않습니다.</p>}
+              {focus !== 'doc' && st !== 'error' && <p className={short ? 'gate-short' : 'muted small'}>{gateText}</p>}
+              {short && st !== 'error' && <p><Link className="button-link gold" href={`/shop?from=/a/${id}`}>🎟️ 관문권 상점 가기</Link></p>}
               {app.byok && (
                 <label className="key-field">
                   <span>내 Anthropic API 키 ({app.engineLabel} 지원자 호출에만 씁니다. 저장하지 않습니다)</span>
                   <input type="password" autoComplete="off" spellCheck={false} placeholder="sk-ant-…" value={apiKey} onChange={e => setApiKey(e.target.value)} />
                 </label>
               )}
-              <button disabled={sending || (app.byok && !apiKey.trim())} onClick={() => post('challenge', { challenge: focus, apiKey: app.byok ? apiKey : undefined })}>
-                {st === 'error' ? '다시 시도하기' : `${TITLES[focus]} 도전하기`}
-              </button>
+              {!(short && st !== 'error') && (
+                <button disabled={sending || (app.byok && !apiKey.trim())} onClick={() => post('challenge', { challenge: focus, apiKey: app.byok ? apiKey : undefined })}>
+                  {st === 'error' ? '다시 시도하기' : `${TITLES[focus]} 도전하기`}
+                </button>
+              )}
+              {error && <p className="error" role="alert">{error}</p>}
             </>
           )}
           {st === 'sealed' && (
@@ -323,22 +350,26 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
         </section>
       )}
 
-      {letter && cur.attempts[letter.stage] && (
+      {letter && lv.attempts[letter.stage] && (
         <ResultLetter
           stage={letter.stage}
-          passed={Boolean(cur.attempts[letter.stage]!.passed)}
+          passed={Boolean(lv.attempts[letter.stage]!.passed)}
           agentName={name}
-          version={cur.n}
-          date={cur.attempts[letter.stage]!.finishedAt}
+          version={lv.n}
+          date={lv.attempts[letter.stage]!.finishedAt}
           mode={letter.mode}
           onClose={() => {
+            // 통지서를 닫은 뒤에야 뒤 화면을 연 결과로 바꾼다 (그때 문이 열리고 캐릭터가 움직인다)
+            holding.current = false;
+            if (revealed) apply(revealed);
+            setRevealed(null);
             setLetter(null);
             setPicked(null);
             void load();
           }}
         >
-          <StageResult passLines={app.passLines} stage={letter.stage} results={r} />
-          <Logs attempt={cur.attempts[letter.stage]} />
+          <StageResult passLines={app.passLines} stage={letter.stage} results={lv.results} />
+          <Logs attempt={lv.attempts[letter.stage]} />
         </ResultLetter>
       )}
 
