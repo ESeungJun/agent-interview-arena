@@ -49,7 +49,7 @@ function printSummary(r: InterviewReport, file: string): void {
   const doc = r.stages.doc as { output?: { feedback?: { principle: string; problem: string; fix_example: string }[] } } | undefined;
   for (const f of doc?.output?.feedback ?? []) console.log(`  [${f.principle}] ${f.problem}\n      → ${f.fix_example}`);
   const cost = u.interviewer.costUsd === null || u.candidate.costUsd === null ? '?' : (u.interviewer.costUsd + u.candidate.costUsd).toFixed(4);
-  console.log(`호출: 면접관 ${u.interviewer.calls}회 / 지원자 ${u.candidate.calls}회 · 비용 $${cost}${r.backend === "api" ? " (API 백엔드는 비용 미집계)" : ""}`);
+  console.log(`호출: 면접관 ${u.interviewer.calls}회 / 지원자 ${u.candidate.calls}회 · 비용 $${cost}${r.backend !== "api" ? " (CLI 백엔드는 비용 미집계)" : ""}`);
   console.log(`결과 파일: ${file}`);
 }
 

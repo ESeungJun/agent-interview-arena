@@ -36,10 +36,13 @@ const doc = (report.stages.doc as DocResult).output;
 const exam = await openExam(md, { store: memoryExamStore(), fresh: true });
 const llm = localLlm();
 
+/** Haiku 면접관이 판정을 못 내 Sonnet 이 다시 판정한 횟수 */
+let fallbacks = 0;
+
 function newContext(): Context {
   return {
     md, llm, target: report.config.target, engine: report.config.engine, interviewer: values.interviewer as ModelAlias,
-    rng: Math.random, screenSampleRate: 0, log: () => {}, exam,
+    rng: Math.random, screenSampleRate: 0, log: line => void (line.includes("Sonnet 이 다시") && fallbacks++), exam,
     usage: {
       interviewer: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0, calls: 0 },
       candidate: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0, calls: 0 },
@@ -84,6 +87,8 @@ async function measure(label: string, passLine: number, run: (ctx: Context) => P
   console.log(`  합격 ${passes}/${times}  ${passes === 0 || passes === times ? "합불 일치" : "⚠️ 합불이 갈림"}`);
   console.log(`  판정 불일치 ${(rate * 100).toFixed(0)}%  ${flipped.join(", ")}`);
   if (values.detail) for (const d of details) console.log(d);
+  if (fallbacks) console.log(`  Sonnet 으로 다시 판정 ${fallbacks}회`);
+  fallbacks = 0;
   console.log(`  면접관 호출 ${calls}회 · 비용 $${cost === null ? "?" : cost.toFixed(3)} · 입력 ${input} 토큰 중 캐시 읽기 ${cached} · ${((Date.now() - started) / 1000).toFixed(0)}초`);
 }
 
@@ -96,7 +101,8 @@ if (values.round !== "r1") {
   const r2 = report.stages.r2 as Round2Result | undefined;
   if (!r2) console.log("2차 기록 없음");
   else {
-    const violated = r2.scenarios.filter(s => r2.transcripts[s.id].some(t => checkContracts(t, doc.verifiable_contracts).length > 0)).map(s => s.id);
+    // 2차는 시나리오마다 여러 회차(S1-a, S1-b …)로 돈다. 위반은 회차 단위로 센다 (core/stages.ts round2 와 같게)
+    const violated = Object.entries(r2.transcripts).filter(([, turns]) => turns.some(t => checkContracts(t, doc.verifiable_contracts).length > 0)).map(([runId]) => runId);
     await measure("2차", PASS_LINE.r2, ctx => evaluateRound2(ctx, doc, r2.scenarios, r2.transcripts, violated));
   }
 }
