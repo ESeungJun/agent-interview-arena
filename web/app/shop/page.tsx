@@ -18,7 +18,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   const back = safeReturn((await searchParams).from);
   const viewer = await getViewer();
   const wallet = viewer
-    ? { balance: await passBalance(viewer.id), freeR1Left: Math.max(0, GATE.freeR1PerDay - (await freeR1UsedToday(viewer.id))), history: (await passHistory(viewer.id)).map(h => ({ ...h, when: when(h.at) })) }
+    ? await Promise.all([passBalance(viewer.id), freeR1UsedToday(viewer.id), passHistory(viewer.id)]).then(([balance, freeR1Used, history]) => ({
+        balance, freeR1Left: Math.max(0, GATE.freeR1PerDay - freeR1Used), history: history.map(h => ({ ...h, when: when(h.at) })),
+      }))
     : null;
   const rules = (Object.values(DIVISIONS)).map(d => ({ label: d.label, passes: d.passesPerGate }));
   return (
