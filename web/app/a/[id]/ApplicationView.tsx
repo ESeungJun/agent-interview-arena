@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AgentCard, { type AgentMood } from '../../pixel/AgentCard';
 import Backdrop from '../../pixel/Backdrop';
@@ -180,7 +181,7 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
   const freeR1 = focus === 'r1' && gate.freeR1Left > 0;
   const short = focus !== 'doc' && !freeR1 && gate.balance < gate.passesPerGate;
   const gateText = freeR1 ? `오늘 무료 1차가 ${gate.freeR1Left}번 남았습니다. 관문권을 쓰지 않습니다.`
-    : short ? `관문권 ${gate.passesPerGate}장이 필요합니다 (보유 ${gate.balance}장). 관문권 결제는 준비 중입니다.`
+    : short ? `관문권 ${gate.passesPerGate}장이 필요합니다 (보유 ${gate.balance}장). 관문권 상점을 확인해 주세요.`
     : `관문권 ${gate.passesPerGate}장을 씁니다 (보유 ${gate.balance}장 · 1장 ${gate.priceKrw.toLocaleString('ko-KR')}원).`;
 
   // 도전 버튼이 보이는 동안은 오류를 버튼 바로 아래에 띄운다 (맨 위에 띄우면 누른 사람이 못 본다)
@@ -257,15 +258,18 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
                 {app.estimates ? ` 보통 약 ${Math.max(1, Math.round(app.estimates[focus].seconds / 60))}분 걸립니다.` : ''}
               </p>
               {focus !== 'doc' && st !== 'error' && <p className={short ? 'gate-short' : 'muted small'}>{gateText}</p>}
+              {short && st !== 'error' && <p><Link className="button-link gold" href={`/shop?from=/a/${id}`}>🎟️ 관문권 상점 가기</Link></p>}
               {app.byok && (
                 <label className="key-field">
                   <span>내 Anthropic API 키 ({app.engineLabel} 지원자 호출에만 씁니다. 저장하지 않습니다)</span>
                   <input type="password" autoComplete="off" spellCheck={false} placeholder="sk-ant-…" value={apiKey} onChange={e => setApiKey(e.target.value)} />
                 </label>
               )}
-              <button disabled={sending || (app.byok && !apiKey.trim()) || (st !== 'error' && short)} onClick={() => post('challenge', { challenge: focus, apiKey: app.byok ? apiKey : undefined })}>
-                {st === 'error' ? '다시 시도하기' : short ? '관문권이 필요합니다' : `${TITLES[focus]} 도전하기`}
-              </button>
+              {!(short && st !== 'error') && (
+                <button disabled={sending || (app.byok && !apiKey.trim())} onClick={() => post('challenge', { challenge: focus, apiKey: app.byok ? apiKey : undefined })}>
+                  {st === 'error' ? '다시 시도하기' : `${TITLES[focus]} 도전하기`}
+                </button>
+              )}
               {error && <p className="error" role="alert">{error}</p>}
             </>
           )}

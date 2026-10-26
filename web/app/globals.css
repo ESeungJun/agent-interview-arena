@@ -375,6 +375,72 @@ button.secondary { background: var(--white); color: var(--ink); border: 2px soli
 @media (max-width: 760px) { .trash-window { left: 8px; right: 8px; top: 8px; bottom: 52px; width: auto; max-height: none; } }
 @media (pointer: coarse) { .row-button { min-height: 44px; } }
 
+/* ── 관문권 상점 (/shop): 바탕화면 브라우저 창 안에 뜬 쇼핑몰 ─────────────── */
+body:has(main.shop-page) { background: var(--abyss) url(/pixel/desktop/wallpaper.webp) center / cover fixed; }
+main.shop-page { max-width: min(1120px, 94vw); }
+.shop-window { position: relative; }
+.shop-window .title-bar { cursor: default; }
+.shop { display: grid; gap: 20px; }
+.shop h1 { font-size: 24px; margin: 0; }
+.shop h2 { margin: 0 0 10px; font-size: 16px; }
+.shop-nav { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 3px solid var(--ink); }
+.shop-logo { font: 20px var(--font-pixel); letter-spacing: 1px; }
+.shop-logo span { margin-left: 4px; padding: 0 6px; background: var(--gold); border: 2px solid var(--ink); }
+.shop-nav .muted { margin-left: auto; }
+.shop-wallet { padding: 4px 10px; background: var(--night); color: var(--white); font: 13px var(--font-pixel); }
+.shop-wallet b { color: var(--gold); }
+.shop-notice { margin: 0; padding: 10px 14px; background: #fff8db; border: 2px dashed var(--gold-deep); font-size: 14px; }
+.shop-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
+.shop-product { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 20px; padding: 18px; background: var(--paper); border: 3px solid var(--ink); box-shadow: var(--block); }
+.shop-product-body { display: grid; gap: 12px; align-content: start; }
+.shop-price { margin: 0; font: 26px var(--font-pixel); }
+.shop-price .muted { font: 13px var(--font-body); }
+
+/* 픽셀 입장권 그림: 금색 본권 + 점선으로 뜯는 꼬리표 */
+.pass-art { display: flex; align-self: start; height: 132px; filter: drop-shadow(6px 6px 0 rgba(0, 0, 0, .35)); transform: rotate(-4deg); }
+.pass-stub { display: grid; place-items: center; width: 44px; background: var(--red); color: var(--white); border: 3px solid var(--ink); border-right: 3px dashed var(--ink); font: 11px var(--font-pixel); writing-mode: vertical-rl; letter-spacing: 2px; }
+.pass-main { flex: 1; display: grid; place-content: center; gap: 6px; text-align: center; background: repeating-linear-gradient(45deg, var(--gold) 0 10px, #ffdc6b 10px 20px); border: 3px solid var(--ink); border-left: 0; }
+.pass-main b { font: 22px var(--font-pixel); }
+.pass-main small { font-size: 11px; }
+
+.shop-presets, .shop-methods { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; border: 0; }
+.shop-presets legend, .shop-methods legend { margin-bottom: 6px; font: 13px var(--font-pixel); }
+.shop-presets > button { min-height: 34px; padding: 4px 14px; background: var(--white); color: var(--ink); border: 2px solid var(--ink); box-shadow: none; font: 13px var(--font-pixel); }
+.shop-presets > button.on { background: var(--night); color: var(--gold); }
+.stepper { display: inline-flex; align-items: stretch; margin-left: 6px; border: 2px solid var(--ink); }
+.stepper button { min-height: 30px; width: 32px; padding: 0; background: var(--window); color: var(--ink); box-shadow: none; font: 16px var(--font-pixel); }
+.stepper input { width: 48px; border: 0; border-inline: 2px solid var(--ink); text-align: center; font: 14px var(--font-mono); }
+.shop-methods label { display: inline-flex; align-items: center; padding: 6px 12px; background: var(--white); border: 2px solid var(--ink); font-size: 13px; cursor: pointer; }
+.shop-methods label.on { box-shadow: 3px 3px 0 var(--blue); border-color: var(--blue); }
+.shop-methods input { position: absolute; opacity: 0; pointer-events: none; }
+.shop-methods label:has(input:focus-visible) { outline: 3px solid var(--gold); outline-offset: 2px; }
+
+.shop-summary { position: sticky; top: 0; display: grid; gap: 12px; padding: 18px; background: var(--white); border: 3px solid var(--ink); box-shadow: 6px 6px 0 var(--ink); }
+.shop-summary dl { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; margin: 0; font-size: 14px; }
+.shop-summary dd { margin: 0; text-align: right; }
+.shop-summary .total { padding-top: 8px; border-top: 2px solid var(--ink); font: 16px var(--font-pixel); }
+.shop-summary > .muted { margin: 0; }
+.shop-agree { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--muted); }
+.shop-pay { width: 100%; min-height: 48px; text-align: center; background: var(--blue); }
+
+.shop-info { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.shop-info > div { padding: 16px; background: #f6f7fb; border: 2px solid var(--ink); }
+.shop-info ul { margin: 0; padding-left: 18px; font-size: 14px; }
+.shop-info li + li { margin-top: 4px; }
+.shop-history table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.shop-history th, .shop-history td { padding: 6px 8px; border-bottom: 1px solid #ddd; text-align: left; }
+.shop-history .num { text-align: right; font-family: var(--font-mono); }
+
+@media (max-width: 900px) {
+  .shop-grid, .shop-info { grid-template-columns: 1fr; }
+  .shop-summary { position: static; }
+}
+@media (max-width: 560px) {
+  .shop-product { grid-template-columns: 1fr; }
+  .pass-art { justify-self: center; width: 240px; }
+  .shop-nav { flex-wrap: wrap; }
+}
+
 /* ── 공개판: 체급 고르기·추론 강도·지원자 키·로그인·명예의 전당 ───────────── */
 .divisions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 14px; padding: 0; border: 0; }
 .divisions legend { margin-bottom: 6px; font: 13px var(--font-pixel); }
@@ -422,3 +488,7 @@ button.secondary { background: var(--white); color: var(--ink); border: 2px soli
 }
 
 @media (max-width: 760px) { .title-bar { cursor: default; } }
+.desktop-icon .icon-emoji { display: grid; place-items: center; width: 56px; height: 56px; font-size: 40px; line-height: 1; text-shadow: none; }
+.button-link.gold { background: var(--gold); color: var(--ink); font-family: var(--font-pixel); }
+@media (max-width: 760px) { .desktop-icon .icon-emoji { width: 40px; height: 40px; font-size: 30px; } }
+a.desktop-icon { text-decoration: none; }

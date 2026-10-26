@@ -130,6 +130,21 @@ export async function passBalance(accountId: string, q?: Query): Promise<number>
   return Number(n);
 }
 
+export type PassEntry = { id: number; delta: number; reason: string; challenge: string | null; agentName: string | null; at: string };
+
+/** 관문권 증감 기록 (상점 화면). 어느 지원서의 어느 관문에 썼는지 함께 보여 준다 */
+export async function passHistory(accountId: string, limit = 20): Promise<PassEntry[]> {
+  const rows = await (await getDb()).query<{ id: number; delta: number; reason: string; challenge: string | null; agent_name: string | null; created_at: string | Date }>(
+    `select l.id, l.delta, l.reason, l.challenge, a.agent_name, l.created_at
+     from pass_ledger l left join applications a on a.id = l.application_id
+     where l.account_id = $1 order by l.created_at desc, l.id desc limit $2`,
+    [accountId, limit],
+  );
+  return rows.map(r => ({
+    id: Number(r.id), delta: Number(r.delta), reason: r.reason, challenge: r.challenge, agentName: r.agent_name, at: new Date(r.created_at).toISOString(),
+  }));
+}
+
 /** 오늘 쓴 무료 1차 (체급 합산) */
 export async function freeR1UsedToday(accountId: string, q?: Query): Promise<number> {
   const query = q ?? (await getDb()).query;
