@@ -35,6 +35,7 @@ export async function applicationView(app: Application) {
     tickets: { used: used[app.division], perDay: division.ticketsPerDay },
     /** 서류 다음 관문 비용 (D-48): 1차 하루 무료 횟수, 유료 관문 하나에 드는 관문권, 보유 관문권 */
     gate: {
+      required: GATE.required,
       freeR1Left: Math.max(0, GATE.freeR1PerDay - freeR1Used),
       passesPerGate: division.passesPerGate,
       balance,

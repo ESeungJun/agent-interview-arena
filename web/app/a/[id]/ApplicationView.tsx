@@ -36,7 +36,7 @@ type Application = {
   /** 오늘 이 체급에서 쓴 제출 티켓 */
   tickets: { used: number; perDay: number };
   /** 서류 다음 관문 비용 (lib/view.ts) */
-  gate: { freeR1Left: number; passesPerGate: number; balance: number; priceKrw: number };
+  gate: { required: boolean; freeR1Left: number; passesPerGate: number; balance: number; priceKrw: number };
   passLines: PassLines;
   estimates?: Record<Challenge, Estimate>;
 };
@@ -73,6 +73,8 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
   const [picked, setPicked] = useState<Challenge | null>(null);
   /** 열려 있는 결과 통지서 */
   const [letter, setLetter] = useState<{ stage: Challenge; mode: 'reveal' | 'view' } | null>(null);
+  /** 방금 연 결과. 통지서를 닫을 때까지 뒤 화면(복도·캐릭터)은 열기 전 상태로 두고, 통지서만 이 결과로 그린다 (도장 전에 문이 열려 결과가 새지 않게) */
+  const [revealed, setRevealed] = useState<Application | null>(null);
   /** 무제한급 도전에 쓸 지원자 키. 화면 메모리에만 두고 보낸 뒤 비운다 */
   const [apiKey, setApiKey] = useState('');
 
@@ -140,6 +142,8 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
 
   if (!app) return <p className={error ? 'error' : 'muted'}>{error ?? '불러오는 중…'}</p>;
   const cur = app.versions[app.versions.length - 1];
+  /** 통지서에 그릴 버전: 방금 연 결과가 있으면 그것, 아니면 지금 화면 */
+  const lv = revealed ? revealed.versions[revealed.versions.length - 1] : cur;
   const r = cur.results;
   const past = app.versions.slice(0, -1).reverse();
   // 결과 통지서를 아직 열지 않은 단계. 열기 전에는 합격·불합격과 그에 따른 다음 단계를 드러내지 않는다
@@ -179,8 +183,8 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
   // 서류 다음 관문 비용 (D-48). 서버 오류 뒤 다시 시도는 이미 낸 관문이라 더 쓰지 않는다
   const { gate } = app;
   const freeR1 = focus === 'r1' && gate.freeR1Left > 0;
-  const short = focus !== 'doc' && !freeR1 && gate.balance < gate.passesPerGate;
-  const gateText = freeR1 ? `오늘 무료 1차가 ${gate.freeR1Left}번 남았습니다. 관문권을 쓰지 않습니다.`
+  const short = gate.required && focus !== 'doc' && !freeR1 && gate.balance < gate.passesPerGate;
+  const gateText = !gate.required ? '서류를 통과해 얻은 도전이라 티켓을 쓰지 않습니다.' : freeR1 ? `오늘 무료 1차가 ${gate.freeR1Left}번 남았습니다. 관문권을 쓰지 않습니다.`
     : short ? `관문권 ${gate.passesPerGate}장이 필요합니다 (보유 ${gate.balance}장). 관문권 상점을 확인해 주세요.`
     : `관문권 ${gate.passesPerGate}장을 씁니다 (보유 ${gate.balance}장 · 1장 ${gate.priceKrw.toLocaleString('ko-KR')}원).`;
 
@@ -199,7 +203,7 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `결과를 열지 못했습니다 (${res.status})`);
-      apply(data);
+      setRevealed(data);
       setLetter({ stage, mode: 'reveal' });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -341,22 +345,25 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
         </section>
       )}
 
-      {letter && cur.attempts[letter.stage] && (
+      {letter && lv.attempts[letter.stage] && (
         <ResultLetter
           stage={letter.stage}
-          passed={Boolean(cur.attempts[letter.stage]!.passed)}
+          passed={Boolean(lv.attempts[letter.stage]!.passed)}
           agentName={name}
-          version={cur.n}
-          date={cur.attempts[letter.stage]!.finishedAt}
+          version={lv.n}
+          date={lv.attempts[letter.stage]!.finishedAt}
           mode={letter.mode}
           onClose={() => {
+            // 통지서를 닫은 뒤에야 뒤 화면을 연 결과로 바꾼다 (그때 문이 열리고 캐릭터가 움직인다)
+            if (revealed) apply(revealed);
+            setRevealed(null);
             setLetter(null);
             setPicked(null);
             void load();
           }}
         >
-          <StageResult passLines={app.passLines} stage={letter.stage} results={r} />
-          <Logs attempt={cur.attempts[letter.stage]} />
+          <StageResult passLines={app.passLines} stage={letter.stage} results={lv.results} />
+          <Logs attempt={lv.attempts[letter.stage]} />
         </ResultLetter>
       )}
 

@@ -396,7 +396,7 @@ export async function startChallenge(app: Application, challenge: Challenge, byo
   }
   // 도전할 수 없는 단계면 관문권을 잡기 전에 막는다 (잡았다 돌려주는 기록을 남기지 않게)
   const { running, next } = challengeState(app);
-  if (challenge === 'doc' || running || next !== challenge) return reserveChallenge(app.id, challenge, byokKey);
+  if (!GATE.required || challenge === 'doc' || running || next !== challenge) return reserveChallenge(app.id, challenge, byokKey);
   const charge = await chargeGate(app, challenge);
   if ('ok' in charge) return charge;
   const reserved = await reserveChallenge(app.id, challenge, byokKey);
