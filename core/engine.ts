@@ -49,7 +49,8 @@ export type ConverseRequest = {
   cache?: boolean;
 };
 
-export type TurnResult = { text: string; json?: unknown; refused: boolean };
+/** stopReason: 모델이 멈춘 이유 (end_turn·max_tokens·refusal 등). JSON 을 못 받았을 때 원인을 남기려고 둔다 */
+export type TurnResult = { text: string; json?: unknown; refused: boolean; stopReason?: string };
 export type ConverseResult = {
   turns: TurnResult[];
   /** inputTokens는 캐시 쓰기·읽기를 포함한 전체 입력이다. cacheReadTokens는 그중 캐시에서 읽은 양이다. */
@@ -79,9 +80,12 @@ async function converseApi(client: Anthropic, req: ConverseRequest): Promise<Con
     if (req.effort) outputConfig.effort = req.effort;
     if (isLast && req.schema) outputConfig.format = { type: "json_schema", schema: req.schema };
 
+    // Haiku 5.5 는 생각(thinking)이 기본으로 켜져 있고 생각 토큰도 max_tokens 에 들어간다. 면접관 채점은 생각이 길어
+    // 16000 에서 JSON 을 쓰기 전에 잘렸다 (stop_reason max_tokens). 상한을 올리고, 오래 걸릴 수 있어 스트리밍으로 받는다
+    const long = req.role === "interviewer" && req.model === "haiku";
     const params = {
       model: MODEL_IDS[req.model],
-      max_tokens: 16000,
+      max_tokens: long ? 64000 : 16000,
       system: req.system,
       messages,
       ...(req.cache ? { cache_control: { type: "ephemeral" } } : {}),
@@ -97,11 +101,13 @@ async function converseApi(client: Anthropic, req: ConverseRequest): Promise<Con
           betas: ["server-side-fallback-2026-07-01"],
           fallbacks: "default",
         } as unknown as Anthropic.Beta.MessageCreateParamsNonStreaming)
-      : await client.messages.create(params as Anthropic.MessageCreateParamsNonStreaming)) as Anthropic.Message;
+      : long
+        ? await client.messages.stream(params as Anthropic.MessageStreamParams).finalMessage()
+        : await client.messages.create(params as Anthropic.MessageCreateParamsNonStreaming)) as Anthropic.Message;
 
     const text = response.content.flatMap(b => (b.type === "text" ? [b.text] : [])).join("");
     const refused = response.stop_reason === "refusal";
-    turns.push({ text, refused, json: isLast && req.schema && !refused ? safeParse(text) : undefined });
+    turns.push({ text, refused, stopReason: response.stop_reason ?? undefined, json: isLast && req.schema && !refused ? safeParse(text) : undefined });
     const u = response.usage;
     usage.inputTokens += u.input_tokens + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
     usage.cacheReadTokens += u.cache_read_input_tokens ?? 0;

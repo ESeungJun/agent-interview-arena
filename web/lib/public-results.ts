@@ -9,12 +9,19 @@ import { detectorFeedback, redactIds } from './redact.ts';
 
 type AnyResult = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-const ban = (r: AnyResult) => (r.securityBan ? { rule: r.securityBan.rule, reason: redactIds(r.securityBan.reason ?? '') } : undefined);
+/** 면접관 서술 한 칸의 상한. 데이터에 숨은 지시로 면접관이 평가 기준을 길게 옮겨 적어도 통째로 내보내지 않는다 */
+const MAX_TEXT = 1000;
+const say = (s: string) => {
+  const t = redactIds(s);
+  return t.length > MAX_TEXT ? `${t.slice(0, MAX_TEXT)}…` : t;
+};
+
+const ban = (r: AnyResult) => (r.securityBan ? { rule: r.securityBan.rule, reason: say(r.securityBan.reason ?? '') } : undefined);
 const round = (r: AnyResult) => ({
   passed: r.passed, securityBan: ban(r), score: r.score, breakdown: r.breakdown,
   output: {
-    decisive_mistake: r.output?.decisive_mistake ? redactIds(r.output.decisive_mistake) : null,
-    comment: redactIds(r.output?.comment ?? ''),
+    decisive_mistake: r.output?.decisive_mistake ? say(r.output.decisive_mistake) : null,
+    comment: say(r.output?.comment ?? ''),
   },
 });
 
@@ -25,7 +32,7 @@ export function publicResults(results: StageResults): StageResults {
   if (r.doc) {
     out.doc = {
       passed: r.doc.passed, securityBan: ban(r.doc), score: r.doc.score, breakdown: r.doc.breakdown,
-      output: { feedback: (r.doc.output?.feedback ?? []).map((f: AnyResult) => ({ problem: redactIds(f.problem ?? ''), fix_example: redactIds(f.fix_example ?? '') })), persona: { waiting_room_monologue: r.doc.output?.persona?.waiting_room_monologue ? redactIds(r.doc.output.persona.waiting_room_monologue) : undefined } },
+      output: { feedback: (r.doc.output?.feedback ?? []).map((f: AnyResult) => ({ problem: say(f.problem ?? ''), fix_example: say(f.fix_example ?? '') })), persona: { waiting_room_monologue: r.doc.output?.persona?.waiting_room_monologue ? say(r.doc.output.persona.waiting_room_monologue) : undefined } },
     };
   }
   if (r.r1) out.r1 = round(r.r1);
@@ -33,11 +40,11 @@ export function publicResults(results: StageResults): StageResults {
   if (r.final) {
     out.final = {
       passed: r.final.passed, securityBan: ban(r.final),
-      executiveComment: r.final.executiveComment ? redactIds(r.final.executiveComment) : r.final.executiveComment,
+      executiveComment: r.final.executiveComment ? say(r.final.executiveComment) : r.final.executiveComment,
       // 공격은 순서(공격 1~5)와 방어 여부, 고칠 방향만 보여 준다. 탐지기가 잡은 실패는 탐지 상세 대신 일반 문장으로 바꾼다.
       attacks: (r.final.attacks ?? []).map((a: AnyResult) => ({
         defended: a.defended,
-        reason: a.decided_by === 'detector' ? detectorFeedback(a.detector_hits ?? []) : redactIds(a.reason ?? ''),
+        reason: a.decided_by === 'detector' ? detectorFeedback(a.detector_hits ?? []) : say(a.reason ?? ''),
       })),
     };
   }

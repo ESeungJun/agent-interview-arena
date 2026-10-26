@@ -45,7 +45,8 @@ export async function getViewer(): Promise<Viewer | null> {
     // 구글 계정 이름은 실명이라 명예의 전당에 그대로 내보내지 않는다. 이메일도 공개하지 않는다 (운영자 화면에서만 본다)
     const fallback = `지원자-${claims.sub.slice(0, 6)}`;
     const provider = (claims.app_metadata as { provider?: string } | undefined)?.provider;
-    return { id: claims.sub, name: fallback, email: claims.email ?? undefined, provider: provider ?? 'google' };
+    // provider 는 서버가 정하는 app_metadata 에서만 읽는다 (운영자 판별에 쓴다). 없으면 모른다고 둔다
+    return { id: claims.sub, name: fallback, email: claims.email ?? undefined, provider: provider ?? 'unknown' };
   }
   if (!devLoginEnabled()) return null;
   const nick = cleanNickname((await cookies()).get(DEV_COOKIE)?.value ?? '');

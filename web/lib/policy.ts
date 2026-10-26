@@ -34,8 +34,11 @@ export const DIVISIONS: Record<Division, {
 export const isDivision = (v: unknown): v is Division => v === 'light' || v === 'middle' || v === 'open';
 
 const MODELS: ModelAlias[] = ['haiku', 'sonnet', 'opus'];
-/** 면접관 모델. 통과선이 Sonnet 기준으로 보정돼 있어 시즌 내내 바꾸지 않는다 */
-export const INTERVIEWER: ModelAlias = MODELS.includes(process.env.ARENA_INTERVIEWER as ModelAlias) ? (process.env.ARENA_INTERVIEWER as ModelAlias) : 'sonnet';
+const model = (v: string | undefined, fallback: ModelAlias): ModelAlias => (MODELS.includes(v as ModelAlias) ? (v as ModelAlias) : fallback);
+/** 채점 면접관 모델. 통과선은 Sonnet 기준으로 보정했고, Haiku 도 같은 응답에 합불이 같았다 (D-49) */
+export const INTERVIEWER: ModelAlias = model(process.env.ARENA_INTERVIEWER, 'sonnet');
+/** 출제(1차 과제·2차 시나리오) 면접관 모델. Haiku 는 문제를 덜 까다롭게 내 출제만 따로 고른다 (D-49) */
+export const GENERATOR: ModelAlias = model(process.env.ARENA_GENERATOR, INTERVIEWER);
 export const MODEL_LABEL: Record<ModelAlias, string> = { haiku: 'Claude Haiku', sonnet: 'Claude Sonnet', opus: 'Claude Opus' };
 
 /**

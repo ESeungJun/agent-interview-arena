@@ -12,9 +12,9 @@ import { logEvent, logServerError, pruneEvents, recordStageRun } from './audit.t
 import { BYOK_TTL_MS, maskKeys, openKey } from './byok.ts';
 import { getDb } from './db.ts';
 import { arenaLlm } from './llm.ts';
-import { DIVISIONS, INTERVIEWER, LIMITS } from './policy.ts';
+import { DIVISIONS, GENERATOR, INTERVIEWER, LIMITS } from './policy.ts';
 import { securityBanOf } from './runner.ts';
-import { examStore, getApplication, mutateApplication, mutateAttempt } from './store.ts';
+import { appendLogs, examStore, getApplication, mutateApplication, mutateAttempt } from './store.ts';
 
 /** 공격 편성 시드용 비밀값. 운영은 필수다. 없으면 시드를 계산할 수 있어 쉬운 편성을 골라 낼 수 있다 (core/exam.ts). */
 function examSecret(): string | undefined {
@@ -147,7 +147,7 @@ async function run(job: Job): Promise<void> {
     pending = [];
     // 로그 쓰기가 한 번 실패해도 이후 쓰기와 결과 저장을 막지 않는다 (로그는 진행 표시용이다)
     flushing = flushing
-      .then(() => mutateAttempt(id, n, challenge, a => ({ ...a, logs: [...a.logs, ...lines] })))
+      .then(() => appendLogs(id, n, challenge, lines))
       .catch(e => console.error('[worker] 진행 로그 저장 실패:', maskKeys(e instanceof Error ? e.message : String(e))));
     return flushing;
   };
@@ -173,6 +173,7 @@ async function run(job: Job): Promise<void> {
         division: app.division,
         engine: division.engine,
         interviewer: INTERVIEWER,
+        generator: GENERATOR,
         // 정규식은 키워드 없는 정중한 주입을 못 잡는다. 표본 검사(10%)로 두면 나머지 90%는 서류 면접관 한 명만 막는다.
         screenAll: true,
         examSecret: examSecret(),

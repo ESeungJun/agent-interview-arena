@@ -20,12 +20,16 @@ type Env = {
   ARENA_BYOK_SECRET: string;
   ARENA_EXAM_SECRET: string;
   ARENA_ADMIN_EMAILS?: string;
+  /** 면접관 모델 (haiku·sonnet·opus). 없으면 sonnet (D-49) */
+  ARENA_INTERVIEWER?: string;
+  /** 출제 면접관 모델. 없으면 ARENA_INTERVIEWER (D-49) */
+  ARENA_GENERATOR?: string;
 };
 
 /** 컨테이너에 넘길 변수 (wrangler secret / vars 에서 읽는다) */
 const PASSED = [
   'ANTHROPIC_API_KEY', 'DATABASE_URL', 'DATABASE_CA_CERT', 'NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-  'SITE_URL', 'ARENA_BYOK_SECRET', 'ARENA_EXAM_SECRET', 'ARENA_ADMIN_EMAILS',
+  'SITE_URL', 'ARENA_BYOK_SECRET', 'ARENA_EXAM_SECRET', 'ARENA_ADMIN_EMAILS', 'ARENA_INTERVIEWER', 'ARENA_GENERATOR',
 ] as const;
 
 export class Arena extends Container<Env> {
