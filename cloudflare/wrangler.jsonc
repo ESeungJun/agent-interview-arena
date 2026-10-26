@@ -25,6 +25,9 @@
   // 비밀이 아닌 값. 비밀값은 `wrangler secret put` 으로 넣는다 (README 배포 절)
   "vars": {
     "NEXT_PUBLIC_SUPABASE_URL": "https://vhjufracaobhatylmcsg.supabase.co",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_l_5tSoqAZ8Wepxyxz4gZwA_eqUAwgKl"
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_l_5tSoqAZ8Wepxyxz4gZwA_eqUAwgKl",
+    // 채점은 Haiku, 1·2차 출제는 Sonnet (D-49)
+    "ARENA_INTERVIEWER": "haiku",
+    "ARENA_GENERATOR": "sonnet"
   }
 }
