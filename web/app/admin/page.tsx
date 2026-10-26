@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import {
-  eventKinds, events, isAdmin, overview, revokeWarning, runDetail, runs, system, users,
+  eventKinds, events, grantPasses, isAdmin, overview, revokeWarning, runDetail, runs, system, users,
   type EventRow, type RunRow, type UserRow,
 } from '@/lib/admin';
 import { auditPage } from '@/lib/audited';
@@ -33,6 +33,14 @@ async function revoke(form: FormData) {
   const viewer = await getViewer();
   if (!isAdmin(viewer)) notFound();
   await revokeWarning(Number(form.get('id')), viewer!);
+  revalidatePath('/admin');
+}
+
+async function grant(form: FormData) {
+  'use server';
+  const viewer = await getViewer();
+  if (!isAdmin(viewer)) notFound();
+  await grantPasses(String(form.get('account')), Number(form.get('count')), viewer!);
   revalidatePath('/admin');
 }
 
@@ -115,10 +123,10 @@ async function Users() {
   return (
     <table>
       <thead>
-        <tr><th>계정</th><th>이메일</th><th>가입</th><th>마지막 접속</th><th className="num">지원서</th><th className="num">오늘 티켓</th><th className="num">실행</th><th className="num">비용</th><th>보안 경고</th></tr>
+        <tr><th>계정</th><th>이메일</th><th>가입</th><th>마지막 접속</th><th className="num">지원서</th><th className="num">오늘 티켓</th><th className="num">관문권</th><th className="num">실행</th><th className="num">비용</th><th>보안 경고</th></tr>
       </thead>
       <tbody>
-        {rows.length === 0 && <tr><td colSpan={9} className="empty">계정이 없습니다</td></tr>}
+        {rows.length === 0 && <tr><td colSpan={10} className="empty">계정이 없습니다</td></tr>}
         {rows.map(u => (
           <tr key={u.id}>
             <td><strong>{u.name}</strong><span className="mono dim">{u.id}</span></td>
@@ -126,6 +134,13 @@ async function Users() {
             <td>{kst(u.createdAt)}</td>
             <td title={kst(u.lastSeenAt)}>{ago(u.lastSeenAt)}</td>
             <td className="num">{u.applications}</td><td className="num">{u.ticketsToday}</td>
+            <td className="num">
+              <form action={grant} className="grant">
+                <input type="hidden" name="account" value={u.id} />
+                {u.passes}장 <input type="number" name="count" defaultValue={1} min={-100} max={100} aria-label="지급할 관문권" />
+                <button type="submit">지급</button>
+              </form>
+            </td>
             <td className="num"><a href={`?tab=runs&account=${encodeURIComponent(u.id)}`}>{u.runs}</a></td>
             <td className="num">{usd(u.costUsd)}</td>
             <td>

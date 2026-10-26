@@ -9,9 +9,9 @@ import { after } from 'next/server';
 import { PASS_LINE } from '../../core/scoring.ts';
 import { assignCharacter } from './character.ts';
 import { estimateDurations } from './durations.ts';
-import { DIVISIONS, MODEL_LABEL } from './policy.ts';
+import { DIVISIONS, GATE, MODEL_LABEL } from './policy.ts';
 import { publicVersion } from './public-version.ts';
-import { challengeState, ticketsUsedToday } from './runner.ts';
+import { challengeState, freeR1UsedToday, passBalance, ticketsUsedToday } from './runner.ts';
 import { currentVersion, type Application } from './store.ts';
 
 export async function applicationView(app: Application) {
@@ -29,6 +29,13 @@ export async function applicationView(app: Application) {
     byok: division.byok,
     efforts: division.efforts,
     tickets: { used: (await ticketsUsedToday(app.ownerId))[app.division], perDay: division.ticketsPerDay },
+    /** 서류 다음 관문 비용 (D-48): 1차 하루 무료 횟수, 유료 관문 하나에 드는 관문권, 보유 관문권 */
+    gate: {
+      freeR1Left: Math.max(0, GATE.freeR1PerDay - (await freeR1UsedToday(app.ownerId))),
+      passesPerGate: division.passesPerGate,
+      balance: await passBalance(app.ownerId),
+      priceKrw: GATE.priceKrw,
+    },
     versions: app.versions.map(publicVersion),
     ...challengeState(app),
     passLines: PASS_LINE,
