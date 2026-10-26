@@ -3,7 +3,7 @@
  * 기록이 적으면 측정값 기반 기본값을 쓴다 (지원자 Sonnet · 면접관 Opus, 2026-10 로컬 측정).
  */
 import type { Challenge } from '../../core/interview.ts';
-import { listRecent } from './store.ts';
+import { recentDurations } from './store.ts';
 
 const DEFAULT_SECONDS: Record<Challenge, number> = { doc: 120, r1: 240, r2: 240, final: 180 };
 const MIN_SAMPLES = 3;
@@ -23,13 +23,8 @@ export function estimateDurations(): Promise<Record<Challenge, Estimate>> {
 }
 
 async function measure(): Promise<Record<Challenge, Estimate>> {
-  const all = await listRecent();
   const seconds: Record<Challenge, number[]> = { doc: [], r1: [], r2: [], final: [] };
-  for (const v of all.flatMap(app => app.versions)) {
-    for (const [c, a] of Object.entries(v.attempts) as [Challenge, NonNullable<(typeof v.attempts)[Challenge]>][]) {
-      if (a.status === 'done' && a.finishedAt) seconds[c].push((Date.parse(a.finishedAt) - Date.parse(a.startedAt)) / 1000);
-    }
-  }
+  for (const a of await recentDurations()) seconds[a.challenge]?.push((Date.parse(a.finishedAt) - Date.parse(a.startedAt)) / 1000);
   const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
   return Object.fromEntries(
     (Object.keys(DEFAULT_SECONDS) as Challenge[]).map(c => [

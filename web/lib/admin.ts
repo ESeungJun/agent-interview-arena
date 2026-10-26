@@ -7,10 +7,15 @@ import type { Viewer } from './auth.ts';
 import { getDb } from './db.ts';
 import { startOfTodayKst, WARNING } from './policy.ts';
 
+/**
+ * 운영자: ARENA_ADMIN_EMAILS 에 계정 id 나 이메일이 있는 사람.
+ * 이메일은 구글 로그인일 때만 믿는다. 이메일 가입·이메일 변경이 켜져 있으면 남이 운영자 이메일을 자기 계정에 붙일 수 있다
+ */
 export function isAdmin(viewer: Viewer | null): boolean {
   if (!viewer) return false;
   const allowed = (process.env.ARENA_ADMIN_EMAILS ?? '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-  return allowed.includes(viewer.id.toLowerCase()) || (!!viewer.email && allowed.includes(viewer.email.toLowerCase()));
+  if (allowed.includes(viewer.id.toLowerCase())) return true;
+  return viewer.provider === 'google' && !!viewer.email && allowed.includes(viewer.email.toLowerCase());
 }
 
 const n = (v: unknown) => Number(v ?? 0);
@@ -71,7 +76,7 @@ export async function users(limit = 200): Promise<UserRow[]> {
     `select a.id, a.display_name, a.email, a.provider, a.created_at, a.last_login_at,
        (select max(at) from events e where e.account_id = a.id) last_seen,
        (select count(*) from applications p where p.owner_id = a.id) apps,
-       (select count(*) from tickets t where t.account_id = a.id and t.used_at >= $1) tickets_today,
+       (select count(*) from tickets t where t.account_id = a.id and t.challenge = 'doc' and t.used_at >= $1) tickets_today,
        (select coalesce(sum(delta), 0) from pass_ledger l where l.account_id = a.id) passes,
        (select count(*) from stage_runs r where r.account_id = a.id) runs,
        (select coalesce(sum(cost_usd), 0) from stage_runs r where r.account_id = a.id) cost
