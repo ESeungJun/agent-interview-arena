@@ -14,8 +14,10 @@ export const metadata = { title: { absolute: '에이전트 채용 · Agent Inter
 export default async function Page() {
   await auditPage('/');
   const viewer = await getViewer();
-  const mine = viewer ? await listByOwner(viewer.id) : [];
-  const used = viewer ? await ticketsUsedToday(viewer.id) : { light: 0, middle: 0, open: 0 };
+  // DB 가 컨테이너와 다른 지역에 있어 왕복 한 번이 비싸다. 서로 기다릴 필요 없는 조회는 함께 보낸다
+  const [mine, used] = viewer
+    ? await Promise.all([listByOwner(viewer.id), ticketsUsedToday(viewer.id)])
+    : [[], { light: 0, middle: 0, open: 0 }];
 
   const history: HistoryItem[] = mine.map(a => {
     const v = currentVersion(a);

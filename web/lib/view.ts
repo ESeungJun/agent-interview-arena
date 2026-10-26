@@ -17,6 +17,10 @@ import { currentVersion, type Application } from './store.ts';
 export async function applicationView(app: Application) {
   if (!app.character) after(() => assignCharacter(app.id, currentVersion(app).md));
   const division = DIVISIONS[app.division];
+  // DB 가 컨테이너와 다른 지역에 있어 왕복 한 번이 비싸다. 서로 기다릴 필요 없는 조회는 함께 보낸다
+  const [used, freeR1Used, balance, estimates] = await Promise.all([
+    ticketsUsedToday(app.ownerId), freeR1UsedToday(app.ownerId), passBalance(app.ownerId), estimateDurations(),
+  ]);
   return {
     id: app.id,
     agentName: app.agentName,
@@ -28,18 +32,18 @@ export async function applicationView(app: Application) {
     engineLabel: MODEL_LABEL[division.engine],
     byok: division.byok,
     efforts: division.efforts,
-    tickets: { used: (await ticketsUsedToday(app.ownerId))[app.division], perDay: division.ticketsPerDay },
+    tickets: { used: used[app.division], perDay: division.ticketsPerDay },
     /** 서류 다음 관문 비용 (D-48): 1차 하루 무료 횟수, 유료 관문 하나에 드는 관문권, 보유 관문권 */
     gate: {
-      freeR1Left: Math.max(0, GATE.freeR1PerDay - (await freeR1UsedToday(app.ownerId))),
+      freeR1Left: Math.max(0, GATE.freeR1PerDay - freeR1Used),
       passesPerGate: division.passesPerGate,
-      balance: await passBalance(app.ownerId),
+      balance,
       priceKrw: GATE.priceKrw,
     },
     versions: app.versions.map(publicVersion),
     ...challengeState(app),
     passLines: PASS_LINE,
-    estimates: await estimateDurations(),
+    estimates,
   };
 }
 
