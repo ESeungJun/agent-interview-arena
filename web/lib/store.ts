@@ -81,10 +81,15 @@ export async function listByDivision(division: Division): Promise<Application[]>
   return rows.map(r => r.doc);
 }
 
-/** 최근 끝난 도전들 (예상 소요 시간 계산용) */
-export async function listRecent(limit = 200): Promise<Application[]> {
-  const rows = await (await getDb()).query<Row>('select doc from applications order by updated_at desc limit $1', [limit]);
-  return rows.map(r => r.doc);
+/** 최근 지원서들에서 끝난 도전의 단계와 시작·끝 시각만 꺼낸다 (예상 소요 시간 계산용). 문서 전체(.md·로그)는 가져오지 않는다 */
+export async function recentDurations(limit = 200): Promise<{ challenge: Challenge; startedAt: string; finishedAt: string }[]> {
+  return (await getDb()).query(
+    `select t.key as challenge, t.value->>'startedAt' as "startedAt", t.value->>'finishedAt' as "finishedAt"
+     from (select doc from applications order by updated_at desc limit $1) a,
+          jsonb_array_elements(a.doc->'versions') v, jsonb_each(v->'attempts') t
+     where t.value->>'status' = 'done' and t.value ? 'finishedAt'`,
+    [limit],
+  );
 }
 
 /**
@@ -109,6 +114,23 @@ export function mutateAttempt(id: string, n: number, challenge: Challenge, fn: (
     const cur = v?.attempts[challenge];
     if (v && cur) v.attempts[challenge] = fn(cur);
   }).then(() => undefined);
+}
+
+/**
+ * 진행 로그 줄을 덧붙인다. 지원서 문서 전체를 읽고 다시 쓰지 않고 문장 하나로 로그 배열 끝에만 붙인다
+ * (워커가 1.5초마다 부른다. 잠그고 읽고 쓰는 트랜잭션이면 왕복 4번 동안 연결 하나를 붙든다)
+ */
+export async function appendLogs(id: string, n: number, challenge: Challenge, lines: string[]): Promise<void> {
+  await (await getDb()).query(
+    `update applications a
+     set doc = jsonb_set(a.doc, array['versions', v.i::text, 'attempts', $3::text, 'logs'],
+                         coalesce(a.doc->'versions'->v.i->'attempts'->$3::text->'logs', '[]'::jsonb) || $4::jsonb),
+         updated_at = now()
+     from (select (e.ord - 1)::int as i from applications x, jsonb_array_elements(x.doc->'versions') with ordinality e(v, ord)
+           where x.id = $1 and (e.v->>'n')::int = $2) v
+     where a.id = $1 and a.doc->'versions'->v.i->'attempts' ? $3::text`,
+    [id, n, challenge, JSON.stringify(lines)],
+  );
 }
 
 export async function removeApplication(id: string): Promise<void> {
