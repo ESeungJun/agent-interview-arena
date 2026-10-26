@@ -10,7 +10,7 @@ before(async () => {
   await db.query("insert into accounts (id, display_name) values ('u1', '하울'), ('u2', '다른 사람')");
 });
 
-const { submitApplication, reviseApplication, challengeState, ticketsUsedToday, suspendedUntil, startChallenge } = await import('./runner.ts');
+const { submitApplication, reviseApplication, challengeState, ticketsUsedToday, suspendedUntil, startChallenge, passBalance, freeR1UsedToday } = await import('./runner.ts');
 const { getApplication, mutateApplication } = await import('./store.ts');
 const { leaderboard } = await import('./leaderboard.ts');
 
@@ -92,11 +92,9 @@ test('경량급 티켓은 하루 3장이다', async () => {
   assert.match((r as { message: string }).message, /티켓 3장을 모두/);
 });
 
-test('무제한급은 지원자 키 없이 받지 않고, 중량급은 열기 전에는 받지 않는다', async () => {
-  const open = await submitApplication({ ownerId: 'u2', agentName: 'x.md', md: md('x'), division: 'open' });
-  assert.match((open as { message: string }).message, /API 키가 필요/);
-  const middle = await submitApplication({ ownerId: 'u2', agentName: 'x.md', md: md('x'), division: 'middle' });
-  assert.match((middle as { message: string }).message, /아직 열지 않았/);
+test('중량급·무제한급도 지원자 키 없이 서류를 받는다 (D-48)', async () => {
+  assert.equal((await submitApplication({ ownerId: 'u2', agentName: 'x.md', md: md('x'), division: 'open' })).ok, true);
+  assert.equal((await submitApplication({ ownerId: 'u2', agentName: 'x.md', md: md('x'), division: 'middle' })).ok, true);
 });
 
 test('보안 실격 경고가 90일 안에 3번이면 제출이 막힌다', async () => {
@@ -117,7 +115,8 @@ test('리더보드는 결과를 연 단계만, 에이전트별 최고 기록으�
   assert.equal(board[0].reached, 'doc');
   assert.equal(board[0].scores.doc, 55);
   const started = await startChallenge((await getApplication(c.id))!, 'r1');
-  assert.equal(started.ok, true, '서류를 통과하면 티켓 없이 1차에 도전한다');
+  assert.equal(started.ok, true, '하루 첫 1차는 관문권 없이 도전한다');
+  assert.equal(await freeR1UsedToday('u1'), 1);
 });
 
 test('결과를 짐작할 수 있는 진행 로그 줄은 결과를 열기 전에 뺀다', async () => {
@@ -136,4 +135,24 @@ test('서버 오류로 끝난 단계는 3번까지만 티켓 없이 다시 시�
   const r = await startChallenge((await getApplication(c.id))!, 'r1');
   assert.equal(r.ok, false);
   assert.match((r as { message: string }).message, /3번 이어졌습니다/);
+});
+
+test('2차부터는 관문권을 쓰고, 서버 오류 뒤 다시 시도는 더 쓰지 않는다 (D-48)', async () => {
+  const [c] = await db.query<{ id: string }>("select id from applications where agent_name = 'reviewer.md'");
+  await finish(c.id, 'r1', true, 80);
+  await reveal(c.id, 'r1');
+  const none = await startChallenge((await getApplication(c.id))!, 'r2');
+  assert.equal(none.ok, false);
+  assert.match((none as { message: string }).message, /관문권 1장이 필요/);
+
+  await db.query("insert into pass_ledger (account_id, delta, reason) values ('u1', 1, 'grant')");
+  assert.equal((await startChallenge((await getApplication(c.id))!, 'r2')).ok, true);
+  assert.equal(await passBalance('u1'), 0);
+
+  await mutateApplication(c.id, async (a, q) => {
+    a.versions[a.versions.length - 1].attempts.r2 = { status: 'error', logs: [], startedAt: new Date().toISOString(), errors: 1 };
+    await q('delete from jobs where application_id = $1', [a.id]);
+  });
+  assert.equal((await startChallenge((await getApplication(c.id))!, 'r2')).ok, true, '이미 낸 관문은 잔액이 없어도 다시 시도한다');
+  assert.equal(await passBalance('u1'), 0);
 });

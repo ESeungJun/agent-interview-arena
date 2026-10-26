@@ -50,6 +50,9 @@
 .admin .note { color: var(--a-dim); font-size: 12px; }
 .admin .warning { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
 .admin .warning button { font: inherit; font-size: 12px; padding: 1px 8px; border: 1px solid var(--a-bad); color: var(--a-bad); background: #fff; border-radius: 4px; cursor: pointer; }
+.admin .grant { display: flex; align-items: center; justify-content: flex-end; gap: 4px; white-space: nowrap; }
+.admin .grant input { width: 52px; font: inherit; font-size: 12px; padding: 1px 4px; border: 1px solid var(--a-line); border-radius: 4px; }
+.admin .grant button { font: inherit; font-size: 12px; padding: 1px 8px; border: 1px solid var(--a-line); border-radius: 4px; background: var(--a-panel); color: var(--a-ink); cursor: pointer; }
 .admin .config { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .admin .config li { padding: 4px 10px; border-radius: 6px; border: 1px solid var(--a-line); background: var(--a-panel); font-size: 12px; }
 .admin .config li.ok { border-color: #b7dfc5; color: var(--a-ok); }

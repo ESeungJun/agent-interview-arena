@@ -34,6 +34,8 @@ type Application = {
   division: string; divisionLabel: string; engineLabel: string; byok: boolean; efforts: string[];
   /** 오늘 이 체급에서 쓴 제출 티켓 */
   tickets: { used: number; perDay: number };
+  /** 서류 다음 관문 비용 (lib/view.ts) */
+  gate: { freeR1Left: number; passesPerGate: number; balance: number; priceKrw: number };
   passLines: PassLines;
   estimates?: Record<Challenge, Estimate>;
 };
@@ -173,6 +175,14 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
     : canRevise ? (ticketsLeft > 0 ? '고친 .md 로 재도전 가능' : '오늘 티켓 소진 · 내일 재도전 가능')
     : '면접 종료';
 
+  // 서류 다음 관문 비용 (D-48). 서버 오류 뒤 다시 시도는 이미 낸 관문이라 더 쓰지 않는다
+  const { gate } = app;
+  const freeR1 = focus === 'r1' && gate.freeR1Left > 0;
+  const short = focus !== 'doc' && !freeR1 && gate.balance < gate.passesPerGate;
+  const gateText = freeR1 ? `오늘 무료 1차가 ${gate.freeR1Left}번 남았습니다. 관문권을 쓰지 않습니다.`
+    : short ? `관문권 ${gate.passesPerGate}장이 필요합니다 (보유 ${gate.balance}장). 관문권 결제는 준비 중입니다.`
+    : `관문권 ${gate.passesPerGate}장을 씁니다 (보유 ${gate.balance}장 · 1장 ${gate.priceKrw.toLocaleString('ko-KR')}원).`;
+
   /** 결과 통지서를 연다. 서버가 열었다고 기록한 뒤에야 결과를 내려 주므로, 받은 결과로 통지서를 펴고 도장을 찍는다 */
   async function openSealed(stage: Challenge) {
     setSending(true);
@@ -243,14 +253,14 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
                 {HINTS[focus]}
                 {app.estimates ? ` 보통 약 ${Math.max(1, Math.round(app.estimates[focus].seconds / 60))}분 걸립니다.` : ''}
               </p>
-              {focus !== 'doc' && <p className="muted small">서류를 통과해 얻은 도전이라 티켓을 쓰지 않습니다.</p>}
+              {focus !== 'doc' && st !== 'error' && <p className="muted small">{gateText}</p>}
               {app.byok && (
                 <label className="key-field">
                   <span>내 Anthropic API 키 ({app.engineLabel} 지원자 호출에만 씁니다. 저장하지 않습니다)</span>
                   <input type="password" autoComplete="off" spellCheck={false} placeholder="sk-ant-…" value={apiKey} onChange={e => setApiKey(e.target.value)} />
                 </label>
               )}
-              <button disabled={sending || (app.byok && !apiKey.trim())} onClick={() => post('challenge', { challenge: focus, apiKey: app.byok ? apiKey : undefined })}>
+              <button disabled={sending || (app.byok && !apiKey.trim()) || (st !== 'error' && short)} onClick={() => post('challenge', { challenge: focus, apiKey: app.byok ? apiKey : undefined })}>
                 {st === 'error' ? '다시 시도하기' : `${TITLES[focus]} 도전하기`}
               </button>
             </>

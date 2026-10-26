@@ -9,7 +9,7 @@ import { MAX_MD_BYTES } from '../../core/gate.ts';
 import { CHALLENGES, nextChallenge, STAGE_NAMES, STAGES, type Challenge, type StageResults } from '../../core/interview.ts';
 import { sealKey, verifyKey } from './byok.ts';
 import { getDb, type Query } from './db.ts';
-import { DIVISIONS, LIMITS, startOfTodayKst, WARNING, type Division, type Effort } from './policy.ts';
+import { DIVISIONS, GATE, LIMITS, startOfTodayKst, WARNING, type Division, type Effort } from './policy.ts';
 import { takeKeyCheck } from './limits.ts';
 import { createApplication, currentVersion, listByOwner, mutateApplication, removeApplication, type Application, type Version } from './store.ts';
 
@@ -85,10 +85,10 @@ export const cleanName = (name: string) => name.replace(/[^\w.\-가-힣 ]/g, '')
 
 // ── 티켓·경고 ─────────────────────────────────────────────────────
 
-/** 오늘 체급별로 쓴 티켓 수 */
+/** 오늘 체급별로 쓴 서류 티켓 수 */
 export async function ticketsUsedToday(accountId: string): Promise<Record<Division, number>> {
   const rows = await (await getDb()).query<{ division: Division; n: string | number }>(
-    'select division, count(*) as n from tickets where account_id = $1 and used_at >= $2 group by division',
+    "select division, count(*) as n from tickets where account_id = $1 and challenge = 'doc' and used_at >= $2 group by division",
     [accountId, startOfTodayKst()],
   );
   const used: Record<Division, number> = { light: 0, middle: 0, open: 0 };
@@ -100,7 +100,7 @@ export async function ticketsUsedToday(accountId: string): Promise<Record<Divisi
 async function takeTicket(accountId: string, division: Division): Promise<{ ok: true; ticketId: number } | Fail> {
   return (await getDb()).tx(async q => {
     await q('select id from accounts where id = $1 for update', [accountId]);
-    const [{ n }] = await q<{ n: string | number }>('select count(*) as n from tickets where account_id = $1 and division = $2 and used_at >= $3', [
+    const [{ n }] = await q<{ n: string | number }>("select count(*) as n from tickets where account_id = $1 and division = $2 and challenge = 'doc' and used_at >= $3", [
       accountId, division, startOfTodayKst(),
     ]);
     const limit = DIVISIONS[division].ticketsPerDay;
@@ -119,6 +119,66 @@ async function refundTicket(ticketId: number): Promise<void> {
 /** 티켓을 지원서의 한 버전에 묶는다. 서류전형은 그 버전에 묶인 티켓이 있을 때만 접수한다 */
 async function attachTicket(ticketId: number, applicationId: string, version: number): Promise<void> {
   await (await getDb()).query('update tickets set application_id = $2, version = $3 where id = $1', [ticketId, applicationId, version]);
+}
+
+// ── 관문권 (D-48) ────────────────────────────────────────────────
+
+/** 관문권 잔액 (장부 합계) */
+export async function passBalance(accountId: string, q?: Query): Promise<number> {
+  const query = q ?? (await getDb()).query;
+  const [{ n }] = await query<{ n: string | number | null }>('select coalesce(sum(delta), 0) as n from pass_ledger where account_id = $1', [accountId]);
+  return Number(n);
+}
+
+/** 오늘 쓴 무료 1차 (체급 합산) */
+export async function freeR1UsedToday(accountId: string, q?: Query): Promise<number> {
+  const query = q ?? (await getDb()).query;
+  const [{ n }] = await query<{ n: string | number }>("select count(*) as n from tickets where account_id = $1 and challenge = 'r1' and used_at >= $2", [
+    accountId, startOfTodayKst(),
+  ]);
+  return Number(n);
+}
+
+/** 서류 다음 관문을 열 때 내는 것. 이미 낸 관문(서버 오류 뒤 다시 시도)이면 none */
+type GateCharge = { kind: 'none' } | { kind: 'free'; ticketId: number } | { kind: 'pass'; passes: number };
+
+/** 1차는 하루 무료 횟수 안이면 무료 티켓, 그 밖에는 관문권을 쓴다. 계정 행을 잠가 마지막 한 장을 두 요청이 같이 쓰지 못하게 한다 */
+async function chargeGate(app: Application, challenge: Exclude<Challenge, 'doc'>): Promise<GateCharge | Fail> {
+  const v = currentVersion(app).n;
+  return (await getDb()).tx(async q => {
+    await q('select id from accounts where id = $1 for update', [app.ownerId]);
+    const gate = [app.id, v, challenge];
+    const [free] = await q('select 1 from tickets where application_id = $1 and version = $2 and challenge = $3', gate);
+    const [{ paid }] = await q<{ paid: string | number | null }>(
+      'select coalesce(sum(delta), 0) as paid from pass_ledger where application_id = $1 and version = $2 and challenge = $3', gate);
+    if (free || Number(paid) < 0) return { kind: 'none' as const };
+    if (challenge === 'r1' && (await freeR1UsedToday(app.ownerId, q)) < GATE.freeR1PerDay) {
+      const [row] = await q<{ id: number }>("insert into tickets (account_id, division, application_id, version, challenge) values ($1, $2, $3, $4, 'r1') returning id", [
+        app.ownerId, app.division, app.id, v,
+      ]);
+      return { kind: 'free' as const, ticketId: Number(row.id) };
+    }
+    const passes = DIVISIONS[app.division].passesPerGate;
+    const balance = await passBalance(app.ownerId, q);
+    if (balance < passes) {
+      return { ok: false, status: 402, message: `${STAGE_NAMES[challenge]}에는 관문권 ${passes}장이 필요합니다 (보유 ${balance}장). 관문권 결제는 준비 중입니다.` } as Fail;
+    }
+    await q("insert into pass_ledger (account_id, delta, reason, application_id, version, challenge) values ($1, $2, 'use', $3, $4, $5)", [
+      app.ownerId, -passes, ...gate,
+    ]);
+    return { kind: 'pass' as const, passes };
+  });
+}
+
+/** 접수하지 못한 관문의 무료 1차·관문권을 돌려준다 */
+async function refundGate(app: Application, challenge: Challenge, charge: GateCharge): Promise<void> {
+  const db = await getDb();
+  if (charge.kind === 'free') await db.query('delete from tickets where id = $1', [charge.ticketId]);
+  if (charge.kind === 'pass') {
+    await db.query("insert into pass_ledger (account_id, delta, reason, application_id, version, challenge) values ($1, $2, 'refund', $3, $4, $5)", [
+      app.ownerId, charge.passes, app.id, currentVersion(app).n, challenge,
+    ]);
+  }
 }
 
 /** 서버 오류로 끝난 단계를 티켓 없이 다시 시도할 수 있는 횟수 (같은 버전·단계) */
@@ -289,7 +349,7 @@ export async function reserveChallenge(id: string, challenge: Challenge, byokKey
     const v = currentVersion(app);
     const prev = v.attempts[challenge];
     // 서류전형은 이 버전에 쓴 티켓이 있어야 한다 (서버 오류 뒤 다시 시도할 때도 같은 티켓을 쓴다)
-    if (challenge === 'doc' && (await q('select 1 from tickets where application_id = $1 and version = $2', [app.id, v.n])).length === 0) {
+    if (challenge === 'doc' && (await q("select 1 from tickets where application_id = $1 and version = $2 and challenge = 'doc'", [app.id, v.n])).length === 0) {
       return { ok: false, status: 403, message: '이 버전에 쓴 티켓이 없습니다. 고친 .md 를 새로 내 주세요.' };
     }
     if (prev?.status === 'error' && (prev.errors ?? 0) >= MAX_ERROR_RETRIES) {
@@ -312,14 +372,21 @@ export async function reserveChallenge(id: string, challenge: Challenge, byokKey
   return result;
 }
 
-/** 다음 단계 도전 (서류를 통과해 얻은 도전은 티켓을 쓰지 않는다). 무제한급은 키를 다시 확인한다 */
+/** 다음 단계 도전. 1차는 하루 무료 횟수 안에서 무료, 그 밖의 관문은 관문권을 쓴다 (D-48). 접수하지 못하면 돌려준다 */
 export async function startChallenge(app: Application, challenge: Challenge, byokKey?: string): Promise<{ ok: true; n: number } | Fail> {
   const division = DIVISIONS[app.division];
   if (division.byok) {
     const bad = await checkKey(app.ownerId, byokKey, division.engine);
     if (bad) return bad;
   }
-  return reserveChallenge(app.id, challenge, byokKey);
+  // 도전할 수 없는 단계면 관문권을 잡기 전에 막는다 (잡았다 돌려주는 기록을 남기지 않게)
+  const { running, next } = challengeState(app);
+  if (challenge === 'doc' || running || next !== challenge) return reserveChallenge(app.id, challenge, byokKey);
+  const charge = await chargeGate(app, challenge);
+  if ('ok' in charge) return charge;
+  const reserved = await reserveChallenge(app.id, challenge, byokKey);
+  if (!reserved.ok) await refundGate(app, challenge, charge);
+  return reserved;
 }
 
 /** 휴지통으로 옮기거나 되돌린다. 면접이 진행 중인 지원서는 옮기지 않는다 */

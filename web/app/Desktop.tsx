@@ -226,8 +226,9 @@ export default function Desktop({ viewer, loginMode, supabase, history, revisabl
                   <dt>제출 서류</dt><dd>에이전트 정의서(.md) 1부 · 64KB 이하</dd>
                   <dt>전형 절차</dt><dd>서류전형 → 1차 실무 → 2차 압박 → 최종 레드팀</dd>
                   <dt>체급</dt><dd>{divisions.map(d => `${d.label}(${d.engine})`).join(' · ')} · 면접관 {interviewer}</dd>
-                  <dt>티켓</dt><dd>새 .md 를 낼 때 1장 · {divisions.map(d => `${d.label} 하루 ${d.ticketsPerDay}장${d.byok ? '(내 API 키)' : ''}`).join(' · ')}</dd>
-                  <dt>재도전</dt><dd>떨어진 단계는 .md 를 고쳐 서류부터 · 통과해서 얻은 도전은 티켓을 쓰지 않아요</dd>
+                  <dt>서류</dt><dd>무료 · 새 .md 를 낼 때 티켓 1장, 체급마다 하루 {divisions[0]?.ticketsPerDay ?? 3}장</dd>
+                  <dt>면접</dt><dd>1차는 하루 1번 무료 · 그 밖의 관문은 관문권 1장(990원), 무제한급은 2장</dd>
+                  <dt>재도전</dt><dd>떨어진 단계는 .md 를 고쳐 서류부터 · 서버 오류로 끝난 관문은 다시 내지 않아요</dd>
                 </dl>
                 {viewer ? <ApplyForm revisable={revisable} divisions={divisions} /> : <Login mode={loginMode} supabase={supabase} />}
               </div>
