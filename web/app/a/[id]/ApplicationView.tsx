@@ -183,6 +183,9 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
     : short ? `관문권 ${gate.passesPerGate}장이 필요합니다 (보유 ${gate.balance}장). 관문권 결제는 준비 중입니다.`
     : `관문권 ${gate.passesPerGate}장을 씁니다 (보유 ${gate.balance}장 · 1장 ${gate.priceKrw.toLocaleString('ko-KR')}원).`;
 
+  // 도전 버튼이 보이는 동안은 오류를 버튼 바로 아래에 띄운다 (맨 위에 띄우면 누른 사람이 못 본다)
+  const tryHere = !banned && (st === 'open-to-try' || st === 'error');
+
   /** 결과 통지서를 연다. 서버가 열었다고 기록한 뒤에야 결과를 내려 주므로, 받은 결과로 통지서를 펴고 도장을 찍는다 */
   async function openSealed(stage: Challenge) {
     setSending(true);
@@ -208,7 +211,7 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
     <>
       {app.trashedAt && <p className="trash-banner" role="status">휴지통에 있는 지원서입니다. 결과는 볼 수 있지만, 새로 도전하려면 바탕화면 휴지통에서 복원해 주세요.</p>}
       <Backdrop seed={app.id} exclude={app.character ? `${app.character.job}-${app.character.tone}` : undefined} />
-      {error && <p className="error">{error}</p>}
+      {error && !tryHere && <p className="error">{error}</p>}
 
       <div className="stage-area">
         <AgentCard
@@ -253,7 +256,7 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
                 {HINTS[focus]}
                 {app.estimates ? ` 보통 약 ${Math.max(1, Math.round(app.estimates[focus].seconds / 60))}분 걸립니다.` : ''}
               </p>
-              {focus !== 'doc' && st !== 'error' && <p className="muted small">{gateText}</p>}
+              {focus !== 'doc' && st !== 'error' && <p className={short ? 'gate-short' : 'muted small'}>{gateText}</p>}
               {app.byok && (
                 <label className="key-field">
                   <span>내 Anthropic API 키 ({app.engineLabel} 지원자 호출에만 씁니다. 저장하지 않습니다)</span>
@@ -261,8 +264,9 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
                 </label>
               )}
               <button disabled={sending || (app.byok && !apiKey.trim()) || (st !== 'error' && short)} onClick={() => post('challenge', { challenge: focus, apiKey: app.byok ? apiKey : undefined })}>
-                {st === 'error' ? '다시 시도하기' : `${TITLES[focus]} 도전하기`}
+                {st === 'error' ? '다시 시도하기' : short ? '관문권이 필요합니다' : `${TITLES[focus]} 도전하기`}
               </button>
+              {error && <p className="error" role="alert">{error}</p>}
             </>
           )}
           {st === 'sealed' && (
