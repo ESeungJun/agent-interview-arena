@@ -22,7 +22,9 @@ const noSubscribe = () => () => {};
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
 
 /** 관문권 상점. 바탕화면의 브라우저 창 안에 뜬 쇼핑몰처럼 보인다 */
-export default function Shop({ viewer, wallet, priceKrw, freeR1PerDay, rules }: {
+export default function Shop({ required, viewer, wallet, priceKrw, freeR1PerDay, rules }: {
+  /** 관문권을 받는지 (D-48). 꺼져 있으면 지금은 필요 없다고 알린다 */
+  required: boolean;
   viewer: { name: string } | null;
   wallet: { balance: number; freeR1Left: number; history: (PassEntry & { when: string })[] } | null;
   priceKrw: number; freeR1PerDay: number;
@@ -54,7 +56,12 @@ export default function Shop({ viewer, wallet, priceKrw, freeR1PerDay, rules }: 
           {wallet && <span className="shop-wallet">보유 <b>{wallet.balance}</b>장</span>}
         </nav>
 
-        {!PAYMENTS_OPEN && (
+        {!required && (
+          <p className="shop-notice" role="status">
+            지금은 관문권 없이 모든 면접 관문을 볼 수 있습니다. 관문권은 나중에 이용자가 많아지면 받습니다.
+          </p>
+        )}
+        {required && !PAYMENTS_OPEN && (
           <p className="shop-notice" role="status">
             지금은 결제를 받지 않습니다. 사업자 등록과 결제 대행사 심사가 끝나면 이 화면에서 바로 살 수 있습니다. 그 전에는 운영자가 시험용 관문권을 지급합니다.
           </p>

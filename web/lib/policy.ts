@@ -38,8 +38,12 @@ const MODELS: ModelAlias[] = ['haiku', 'sonnet', 'opus'];
 export const INTERVIEWER: ModelAlias = MODELS.includes(process.env.ARENA_INTERVIEWER as ModelAlias) ? (process.env.ARENA_INTERVIEWER as ModelAlias) : 'sonnet';
 export const MODEL_LABEL: Record<ModelAlias, string> = { haiku: 'Claude Haiku', sonnet: 'Claude Sonnet', opus: 'Claude Opus' };
 
-/** 유료 관문 (D-48). 관문권 1장 990원. 결제가 붙기 전에는 운영자가 지급한다 */
+/**
+ * 유료 관문 (D-48). 관문권 1장 990원. 결제가 붙기 전에는 운영자가 지급한다.
+ * 사람이 늘 때까지는 꺼 둔다 (ARENA_PASSES_REQUIRED=1 이면 켠다). 꺼져 있으면 서류 다음 관문은 모두 무료다
+ */
 export const GATE = {
+  required: process.env.ARENA_PASSES_REQUIRED === '1',
   /** 1차를 관문권 없이 볼 수 있는 횟수 (계정당 하루, 체급 합산) */
   freeR1PerDay: num(process.env.ARENA_FREE_R1, 1),
   priceKrw: 990,

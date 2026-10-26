@@ -1,6 +1,6 @@
 import { auditPage } from '@/lib/audited';
 import { devLoginEnabled, getViewer, SUPABASE, supabaseEnabled } from '@/lib/auth';
-import { DIVISIONS, INTERVIEWER, MODEL_LABEL, type Division } from '@/lib/policy';
+import { DIVISIONS, GATE, INTERVIEWER, MODEL_LABEL, type Division } from '@/lib/policy';
 import { challengeState, sealedChallenge, statusLabel, ticketsUsedToday } from '@/lib/runner';
 import { currentVersion, listByOwner } from '@/lib/store';
 import Desktop, { type HistoryItem } from './Desktop';
@@ -50,5 +50,5 @@ export default async function Page() {
   });
   const loginMode: LoginMode = supabaseEnabled() ? 'supabase' : devLoginEnabled() ? 'dev' : 'none';
 
-  return <Desktop viewer={viewer ? { name: viewer.name } : null} loginMode={loginMode} supabase={loginMode === 'supabase' ? SUPABASE : undefined} history={history} revisable={revisable} divisions={divisions} interviewer={MODEL_LABEL[INTERVIEWER]} />;
+  return <Desktop viewer={viewer ? { name: viewer.name } : null} loginMode={loginMode} supabase={loginMode === 'supabase' ? SUPABASE : undefined} history={history} revisable={revisable} divisions={divisions} interviewer={MODEL_LABEL[INTERVIEWER]} passesRequired={GATE.required} />;
 }

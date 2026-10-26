@@ -26,7 +26,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   return (
     <main className="shop-page">
       <p className="back-link"><Link href={back}>← {back === '/' ? '바탕화면으로' : '면접장으로'}</Link></p>
-      <Shop viewer={viewer ? { name: viewer.name } : null} wallet={wallet} priceKrw={GATE.priceKrw} freeR1PerDay={GATE.freeR1PerDay} rules={rules} />
+      <Shop required={GATE.required} viewer={viewer ? { name: viewer.name } : null} wallet={wallet} priceKrw={GATE.priceKrw} freeR1PerDay={GATE.freeR1PerDay} rules={rules} />
     </main>
   );
 }

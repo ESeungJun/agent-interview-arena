@@ -1,3 +1,4 @@
+process.env.ARENA_PASSES_REQUIRED = '1'; // 관문권 규칙(D-48)을 켠 채로 확인한다
 // 접수·티켓·대기열·결과 숨김·리더보드를 메모리 PGlite 로 확인한다 (LLM 호출 없음)
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
