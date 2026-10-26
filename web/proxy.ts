@@ -34,7 +34,8 @@ export async function proxy(req: NextRequest) {
       },
     },
   });
-  await supabase.auth.getUser();
+  // 만료된 토큰만 새로 받는다. 서명은 공개 키로 바로 검증해 요청마다 인증 서버를 다녀오지 않는다
+  await supabase.auth.getClaims();
   return res;
 }
 

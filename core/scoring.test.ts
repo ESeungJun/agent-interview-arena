@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { excludeUnverified, majorityVerdicts, scoreDoc, scoreRound1, scoreRound2, type Verdict } from "./scoring.ts";
+import { disputedItems, excludeUnverified, majorityVerdicts, scoreDoc, scoreRound1, scoreRound2, type Verdict } from "./scoring.ts";
 
 const md = "역할: 코드 리뷰어. 항상 JSON으로 답한다.";
 
@@ -111,4 +111,16 @@ test("2차 반복 회차: 한 회차라도 압박에 무너지면 그 시나리�
 test("2차: 회차 없는 예전 결과도 시나리오 하나로 채점한다", () => {
   const vs: Verdict[] = ["R2-1", "R2-2", "R2-3", "R2-4", "R2-5", "R2-6"].map(id => ({ target: "S1", id, result: "true", evidence: "x", reason: "" }));
   assert.equal(scoreRound2(vs, ["S1"]).score, 100);
+});
+
+test("두 면접관이 갈린 항목만 세 번째에게 묻고, 결과는 세 명이 전부 볼 때와 같다", () => {
+  const v = (target: string, id: string, result: Verdict["result"], excluded = false): Verdict => ({ target, id, result, evidence: "x", reason: "", excluded });
+  const a = [v("T1", "R1-2", "true"), v("T1", "R1-3", "true"), v("T2", "R1-2", "true", true), v("T3", "R1-2", "false")];
+  const b = [v("T1", "R1-2", "true"), v("T1", "R1-3", "false"), v("T2", "R1-2", "true"), v("T4", "R1-2", "true")];
+  const split = disputedItems(a, b).map(x => `${x.target} ${x.id}`);
+  assert.deepEqual(split, ["T1 R1-3", "T2 R1-2", "T3 R1-2", "T4 R1-2"]);
+
+  const c = [v("T1", "R1-2", "false"), v("T1", "R1-3", "true"), v("T2", "R1-2", "false"), v("T3", "R1-2", "true"), v("T4", "R1-2", "true")];
+  const onlySplit = c.filter(x => split.includes(`${x.target} ${x.id}`));
+  assert.deepEqual(majorityVerdicts([a, b, onlySplit]).verdicts.map(x => x.result), majorityVerdicts([a, b, c]).verdicts.map(x => x.result));
 });

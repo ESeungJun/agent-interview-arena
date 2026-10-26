@@ -62,7 +62,7 @@ export async function overview(): Promise<Overview> {
 
 export type UserRow = {
   id: string; name: string; email: string | null; provider: string | null; createdAt: string; lastLoginAt: string | null; lastSeenAt: string | null;
-  applications: number; ticketsToday: number; runs: number; costUsd: number; warnings: { id: number; rule: string; createdAt: string }[];
+  applications: number; ticketsToday: number; passes: number; runs: number; costUsd: number; warnings: { id: number; rule: string; createdAt: string }[];
 };
 
 export async function users(limit = 200): Promise<UserRow[]> {
@@ -72,6 +72,7 @@ export async function users(limit = 200): Promise<UserRow[]> {
        (select max(at) from events e where e.account_id = a.id) last_seen,
        (select count(*) from applications p where p.owner_id = a.id) apps,
        (select count(*) from tickets t where t.account_id = a.id and t.used_at >= $1) tickets_today,
+       (select coalesce(sum(delta), 0) from pass_ledger l where l.account_id = a.id) passes,
        (select count(*) from stage_runs r where r.account_id = a.id) runs,
        (select coalesce(sum(cost_usd), 0) from stage_runs r where r.account_id = a.id) cost
      from accounts a order by coalesce((select max(at) from events e where e.account_id = a.id), a.created_at) desc limit $2`,
@@ -83,7 +84,7 @@ export async function users(limit = 200): Promise<UserRow[]> {
   return rows.map(r => ({
     id: r.id as string, name: r.display_name as string, email: (r.email as string) ?? null, provider: (r.provider as string) ?? null,
     createdAt: iso(r.created_at)!, lastLoginAt: iso(r.last_login_at), lastSeenAt: iso(r.last_seen),
-    applications: n(r.apps), ticketsToday: n(r.tickets_today), runs: n(r.runs), costUsd: n(r.cost),
+    applications: n(r.apps), ticketsToday: n(r.tickets_today), passes: n(r.passes), runs: n(r.runs), costUsd: n(r.cost),
     warnings: warnings.filter(w => w.account_id === r.id).map(w => ({ id: Number(w.id), rule: w.rule, createdAt: iso(w.created_at)! })),
   }));
 }
@@ -185,4 +186,13 @@ export async function revokeWarning(id: number, admin: Viewer): Promise<void> {
   if (rows[0]) {
     await logEvent({ kind: 'admin_revoke_warning', ok: true, accountId: admin.id, data: { warningId: id, target: rows[0].account_id, rule: rows[0].rule } });
   }
+}
+
+/** 관문권을 지급한다 (결제가 붙기 전 시험·보상용, D-48). 음수면 회수. 누가 줬는지 장부와 접속 기록에 남긴다 */
+export async function grantPasses(accountId: string, count: number, admin: Viewer): Promise<void> {
+  if (!Number.isInteger(count) || count === 0 || Math.abs(count) > 100) return;
+  const rows = await (await getDb()).query<{ id: number }>(
+    "insert into pass_ledger (account_id, delta, reason, note) select id, $2, 'grant', $3 from accounts where id = $1 returning id",
+    [accountId, count, `admin:${admin.id}`]);
+  if (rows[0]) await logEvent({ kind: 'admin_grant_passes', ok: true, accountId: admin.id, data: { target: accountId, count } });
 }
