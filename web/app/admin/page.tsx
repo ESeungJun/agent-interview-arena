@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import {
@@ -60,7 +61,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
       </header>
       <nav>
         {TABS.map(([k, label]) => (
-          <a key={k} href={`?tab=${k}`} aria-current={k === tab ? 'page' : undefined}>{label}</a>
+          <Link key={k} href={`?tab=${k}`} aria-current={k === tab ? 'page' : undefined}>{label}</Link>
         ))}
       </nav>
       {tab === 'overview' && <Overview />}

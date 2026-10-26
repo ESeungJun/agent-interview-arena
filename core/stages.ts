@@ -18,6 +18,8 @@ export type Context = {
   target: string; // claude | gpt | gpt-reasoning | gemini | generic
   engine: ModelAlias; // 지원자 엔진 (체급)
   interviewer: ModelAlias;
+  /** 1차 과제·2차 시나리오를 내는 면접관 모델. 채점보다 출제 품질이 모델 차이를 더 탄다 (D-49). 없으면 interviewer */
+  generator?: ModelAlias;
   rng: () => number;
   exam: Exam; // 분기 고정 출제 (exam.ts)
   screenSampleRate: number; // 정규식 무매칭 제출 중 분류기로 보낼 비율
@@ -39,13 +41,13 @@ function track(ctx: Context, who: "interviewer" | "candidate", r: ConverseResult
 }
 
 async function askInterviewer<T>(
-  ctx: Context, promptFile: string, nonce: string, user: string, schemaName: string, cache = false,
+  ctx: Context, promptFile: string, nonce: string, user: string, schemaName: string, cache = false, first: ModelAlias = ctx.interviewer,
 ): Promise<T> {
   const reasons: string[] = [];
   for (let attempt = 1; attempt <= 2; attempt++) {
     // Haiku 는 서버 측 폴백이 없어 안전 분류기 거절이나 출력 상한에 걸리면 그대로 실패한다. 두 번째 시도는 Sonnet 이 맡는다
-    const model = attempt === 2 && ctx.interviewer === "haiku" ? "sonnet" : ctx.interviewer;
-    if (model !== ctx.interviewer) ctx.log(`  ↻ ${promptFile}: Haiku 면접관이 판정을 내지 못해 Sonnet 이 다시 판정`);
+    const model = attempt === 2 && first === "haiku" ? "sonnet" : first;
+    if (model !== first) ctx.log(`  ↻ ${promptFile}: Haiku 면접관이 판정을 내지 못해 Sonnet 이 다시 판정`);
     const r = await ctx.llm.converse({
       role: "interviewer",
       model,
@@ -361,7 +363,7 @@ export async function round1(ctx: Context, doc: DocOutput): Promise<Round1Result
       const gen = await askInterviewer<{ security_flag: SecurityFlag; tasks: Task[] }>(
         ctx, "interviewer_round1_practical.md", genNonce,
         `mode: GENERATE_TASKS\n${profileBlock(doc)}\n\n${wrap("submission", genNonce, ctx.md)}`,
-        "round1_tasks",
+        "round1_tasks", false, ctx.generator ?? ctx.interviewer,
       );
       const ban = generationBan(gen.security_flag, ctx.md);
       if (ban) return { ...ban, tasks: [], responses: {}, contractViolations: {} };
@@ -477,7 +479,7 @@ export async function round2(ctx: Context, doc: DocOutput, docVerdicts: Verdict[
       ctx, "interviewer_round2_pressure.md", genNonce,
       `mode: GENERATE_SCENARIOS\n${profileBlock(doc)}\n서류전형 D5 판정: ${JSON.stringify(d5)}\n` +
         `범위 규칙: ${scopeRule ? "있음" : "없음 (BORDERLINE_SCOPE 출제 금지)"}\n\n${wrap("submission", genNonce, ctx.md)}`,
-      "round2_scenarios",
+      "round2_scenarios", false, ctx.generator ?? ctx.interviewer,
     );
     // 모자란 출제(빈 목록 등)와 범위 규칙 없는 BORDERLINE_SCOPE는 다시 출제한다. 두 번 모두 실패하면 0점 대신 오류.
     let problem = "";
