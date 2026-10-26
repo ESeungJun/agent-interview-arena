@@ -200,6 +200,10 @@ export default function Desktop({ viewer, loginMode, supabase, history, revisabl
             <span>{i.label}</span>
           </button>
         ))}
+        <Link className="desktop-icon" href="/shop">
+          <span className="icon-emoji" aria-hidden="true">🎟️</span>
+          <span>관문권 상점</span>
+        </Link>
       </nav>
 
       {browserOpen && (
