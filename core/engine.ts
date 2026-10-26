@@ -16,6 +16,28 @@ export const MODEL_IDS: Record<ModelAlias, string> = {
   opus: "claude-opus-5-5",
 };
 
+/**
+ * 백만 토큰당 달러. 5분 캐시 쓰기는 입력의 1.25배다. 가격이 바뀌면 여기만 고친다.
+ * Haiku 5.5는 프롬프트가 10만 토큰을 넘으면 long 가격을 쓴다.
+ */
+type Price = { input: number; output: number; cacheRead: number; long?: Omit<Price, "long"> };
+const PRICES: Record<string, Price> = {
+  "claude-haiku-5-5": { input: 0.1, output: 0.5, cacheRead: 0.01, long: { input: 0.5, output: 2.5, cacheRead: 0.05 } },
+  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.2 },
+  "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2 },
+};
+
+/** 응답 한 번의 비용. 서버 측 폴백으로 다른 모델이 답하면 그 모델 가격으로 센다. 모르는 모델이면 null. */
+export function costUsd(model: string, u: Anthropic.Usage): number | null {
+  const key = Object.keys(PRICES).find(id => model === id || model.startsWith(`${id}-`));
+  if (!key) return null;
+  const write = u.cache_creation_input_tokens ?? 0;
+  const read = u.cache_read_input_tokens ?? 0;
+  const base = PRICES[key];
+  const p = base.long && u.input_tokens + write + read > 100_000 ? base.long : base;
+  return (u.input_tokens * p.input + write * p.input * 1.25 + read * p.cacheRead + u.output_tokens * p.output) / 1e6;
+}
+
 export type ConverseRequest = {
   role: "interviewer" | "candidate";
   model: ModelAlias;
@@ -48,7 +70,7 @@ export function createApiLlm(opts: { apiKey: string }): Llm {
 async function converseApi(client: Anthropic, req: ConverseRequest): Promise<ConverseResult> {
   const messages: Anthropic.MessageParam[] = [];
   const turns: TurnResult[] = [];
-  const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: null };
+  const usage: ConverseResult["usage"] = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0 };
 
   for (const [i, userTurn] of req.userTurns.entries()) {
     messages.push({ role: "user", content: userTurn });
@@ -84,6 +106,8 @@ async function converseApi(client: Anthropic, req: ConverseRequest): Promise<Con
     usage.inputTokens += u.input_tokens + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
     usage.cacheReadTokens += u.cache_read_input_tokens ?? 0;
     usage.outputTokens += response.usage.output_tokens;
+    const cost = costUsd(response.model ?? params.model, u);
+    usage.costUsd = usage.costUsd === null || cost === null ? null : usage.costUsd + cost;
     messages.push({ role: "assistant", content: response.content as Anthropic.ContentBlockParam[] });
   }
   return { turns, usage };
