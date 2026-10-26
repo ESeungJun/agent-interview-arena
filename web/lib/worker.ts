@@ -12,7 +12,7 @@ import { logEvent, logServerError, pruneEvents, recordStageRun } from './audit.t
 import { BYOK_TTL_MS, maskKeys, openKey } from './byok.ts';
 import { getDb } from './db.ts';
 import { arenaLlm } from './llm.ts';
-import { DIVISIONS, INTERVIEWER, LIMITS } from './policy.ts';
+import { DIVISIONS, GENERATOR, INTERVIEWER, LIMITS } from './policy.ts';
 import { securityBanOf } from './runner.ts';
 import { appendLogs, examStore, getApplication, mutateApplication, mutateAttempt } from './store.ts';
 
@@ -173,6 +173,7 @@ async function run(job: Job): Promise<void> {
         division: app.division,
         engine: division.engine,
         interviewer: INTERVIEWER,
+        generator: GENERATOR,
         // 정규식은 키워드 없는 정중한 주입을 못 잡는다. 표본 검사(10%)로 두면 나머지 90%는 서류 면접관 한 명만 막는다.
         screenAll: true,
         examSecret: examSecret(),

@@ -33,24 +33,39 @@ export type Overview = {
 };
 
 export async function overview(): Promise<Overview> {
-  const q = (await getDb()).query;
-  const [acc] = await q<{ total: unknown; today: unknown }>('select count(*) total, count(*) filter (where created_at >= $1) today from accounts', [startOfTodayKst()]);
-  const [act] = await q<{ n: unknown }>('select count(distinct account_id) n from events where at >= $1 and account_id is not null', [ago(DAY)]);
-  const [apps] = await q<{ n: unknown }>('select count(*) n from applications');
-  const [runs] = await q<{ done: unknown; error: unknown; passed: unknown; cost: unknown }>(
-    `select count(*) filter (where status = 'done') done, count(*) filter (where status = 'error') error,
-            count(*) filter (where passed) passed, coalesce(sum(cost_usd), 0) cost from stage_runs where finished_at >= $1`, [ago(DAY)]);
-  const [week] = await q<{ cost: unknown }>('select coalesce(sum(cost_usd), 0) cost from stage_runs where finished_at >= $1', [ago(7 * DAY)]);
-  const byChallenge = await q<{ challenge: string; runs: unknown; passed: unknown; avg_cost: unknown; avg_ms: unknown }>(
-    `select challenge, count(*) runs, count(*) filter (where passed) passed, coalesce(avg(cost_usd), 0) avg_cost, avg(duration_ms) avg_ms
-     from stage_runs where status = 'done' and finished_at >= $1 group by challenge`, [ago(7 * DAY)]);
-  const [jobs] = await q<{ queued: unknown; running: unknown; oldest: string | Date | null; beat: string | Date | null }>(
-    `select count(*) filter (where claimed_at is null) queued, count(*) filter (where claimed_at is not null) running,
-            min(created_at) filter (where claimed_at is null) oldest, max(heartbeat_at) beat from jobs`);
-  const [errs] = await q<{ failed: unknown; server: unknown }>(
-    `select count(*) filter (where not ok and kind not in ('server_error', 'stage_error')) failed,
-            count(*) filter (where kind in ('server_error', 'stage_error')) server from events where at >= $1`, [ago(DAY)]);
-  const [warn] = await q<{ n: unknown }>('select count(*) n from warnings where revoked_at is null and created_at >= $1', [ago(WARNING.windowDays * DAY)]);
+  // DB 가 컨테이너와 다른 지역에 있어 왕복 한 번이 0.1초 넘게 든다. 개요 수치는 문장 하나로 읽는다
+  const [o] = await (await getDb()).query<Record<string, unknown>>(
+    `select
+       (select count(*) from accounts) acc_total,
+       (select count(*) from accounts where created_at >= $1) acc_today,
+       (select count(distinct account_id) from events where at >= $2 and account_id is not null) active,
+       (select count(*) from applications) apps,
+       (select count(*) from stage_runs where finished_at >= $2 and status = 'done') runs_done,
+       (select count(*) from stage_runs where finished_at >= $2 and status = 'error') runs_error,
+       (select count(*) from stage_runs where finished_at >= $2 and passed) runs_passed,
+       (select coalesce(sum(cost_usd), 0) from stage_runs where finished_at >= $2) cost_day,
+       (select coalesce(sum(cost_usd), 0) from stage_runs where finished_at >= $3) cost_week,
+       (select coalesce(json_agg(c), '[]') from (
+          select challenge, count(*) runs, count(*) filter (where passed) passed, coalesce(avg(cost_usd), 0) avg_cost, avg(duration_ms) avg_ms
+          from stage_runs where status = 'done' and finished_at >= $3 group by challenge) c) by_challenge,
+       (select count(*) from jobs where claimed_at is null) queued,
+       (select count(*) from jobs where claimed_at is not null) running,
+       (select min(created_at) from jobs where claimed_at is null) oldest,
+       (select max(heartbeat_at) from jobs) beat,
+       (select count(*) from events where at >= $2 and not ok and kind not in ('server_error', 'stage_error')) failed,
+       (select count(*) from events where at >= $2 and kind in ('server_error', 'stage_error')) server,
+       (select count(*) from warnings where revoked_at is null and created_at >= $4) warnings`,
+    [startOfTodayKst(), ago(DAY), ago(7 * DAY), ago(WARNING.windowDays * DAY)],
+  );
+  const acc = { total: o.acc_total, today: o.acc_today };
+  const act = { n: o.active };
+  const apps = { n: o.apps };
+  const runs = { done: o.runs_done, error: o.runs_error, passed: o.runs_passed, cost: o.cost_day };
+  const week = { cost: o.cost_week };
+  const byChallenge = o.by_challenge as { challenge: string; runs: unknown; passed: unknown; avg_cost: unknown; avg_ms: unknown }[];
+  const jobs = { queued: o.queued, running: o.running, oldest: o.oldest as string | Date | null, beat: o.beat as string | Date | null };
+  const errs = { failed: o.failed, server: o.server };
+  const warn = { n: o.warnings };
   const iso = (v: string | Date | null) => (v ? new Date(v).toISOString() : null);
   const order = ['doc', 'r1', 'r2', 'final'];
   return {
@@ -72,19 +87,19 @@ export type UserRow = {
 
 export async function users(limit = 200): Promise<UserRow[]> {
   const q = (await getDb()).query;
-  const rows = await q<Record<string, unknown>>(
-    `select a.id, a.display_name, a.email, a.provider, a.created_at, a.last_login_at,
+  // 두 조회는 서로 기다릴 필요가 없어 함께 보낸다
+  const [rows, warnings] = await Promise.all([q<Record<string, unknown>>(
+    `select * from (select a.id, a.display_name, a.email, a.provider, a.created_at, a.last_login_at,
        (select max(at) from events e where e.account_id = a.id) last_seen,
        (select count(*) from applications p where p.owner_id = a.id) apps,
        (select count(*) from tickets t where t.account_id = a.id and t.challenge = 'doc' and t.used_at >= $1) tickets_today,
        (select coalesce(sum(delta), 0) from pass_ledger l where l.account_id = a.id) passes,
        (select count(*) from stage_runs r where r.account_id = a.id) runs,
        (select coalesce(sum(cost_usd), 0) from stage_runs r where r.account_id = a.id) cost
-     from accounts a order by coalesce((select max(at) from events e where e.account_id = a.id), a.created_at) desc limit $2`,
+     from accounts a) x order by coalesce(last_seen, created_at) desc limit $2`,
     [startOfTodayKst(), limit],
-  );
-  const warnings = await q<{ id: number; account_id: string; rule: string; created_at: string | Date }>(
-    'select id, account_id, rule, created_at from warnings where revoked_at is null and created_at >= $1 order by created_at desc', [ago(WARNING.windowDays * DAY)]);
+  ), q<{ id: number; account_id: string; rule: string; created_at: string | Date }>(
+    'select id, account_id, rule, created_at from warnings where revoked_at is null and created_at >= $1 order by created_at desc', [ago(WARNING.windowDays * DAY)])]);
   const iso = (v: unknown) => (v ? new Date(v as string).toISOString() : null);
   return rows.map(r => ({
     id: r.id as string, name: r.display_name as string, email: (r.email as string) ?? null, provider: (r.provider as string) ?? null,
@@ -106,7 +121,8 @@ export async function runs(filter: { failed?: boolean; account?: string } = {}, 
   if (filter.account) where.push(`r.account_id = $${params.push(filter.account)}`);
   params.push(limit);
   const rows = await (await getDb()).query<Record<string, unknown>>(
-    `select r.*, a.display_name, p.agent_name from stage_runs r left join accounts a on a.id = r.account_id left join applications p on p.id = r.application_id
+    `select r.id, r.finished_at, r.account_id, r.application_id, r.version, r.challenge, r.division, r.status, r.passed, r.result, r.error,
+            r.duration_ms, r.cost_usd, r.backend, a.display_name, p.agent_name from stage_runs r left join accounts a on a.id = r.account_id left join applications p on p.id = r.application_id
      ${where.length ? `where ${where.join(' and ')}` : ''} order by r.id desc limit $${params.length}`,
     params,
   );
@@ -163,13 +179,15 @@ export type SystemInfo = {
 /** 값은 내보내지 않고 설정됐는지만 본다 */
 const CONFIG = [
   'ANTHROPIC_API_KEY', 'DATABASE_URL', 'DATABASE_CA_CERT', 'NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY', 'SITE_URL',
-  'ARENA_BYOK_SECRET', 'ARENA_EXAM_SECRET', 'ARENA_ADMIN_EMAILS',
+  'ARENA_BYOK_SECRET', 'ARENA_EXAM_SECRET', 'ARENA_ADMIN_EMAILS', 'ARENA_INTERVIEWER', 'ARENA_GENERATOR', 'ARENA_PASSES_REQUIRED',
 ];
 
 export async function system(): Promise<SystemInfo> {
   const db = await getDb();
-  const migrations = await db.query<{ name: string; applied_at: string | Date }>('select name, applied_at from arena_migrations order by name');
-  const jobs = await db.query<Record<string, unknown>>('select id, application_id, version, challenge, created_at, claimed_at, heartbeat_at, worker_id from jobs order by id');
+  const [migrations, jobs] = await Promise.all([
+    db.query<{ name: string; applied_at: string | Date }>('select name, applied_at from arena_migrations order by name'),
+    db.query<Record<string, unknown>>('select id, application_id, version, challenge, created_at, claimed_at, heartbeat_at, worker_id from jobs order by id'),
+  ]);
   const worker = (globalThis as { __arenaWorker?: { running: number; started: boolean } }).__arenaWorker;
   const iso = (v: unknown) => (v ? new Date(v as string).toISOString() : null);
   return {

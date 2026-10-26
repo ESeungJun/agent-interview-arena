@@ -27,6 +27,8 @@ type Usage = Context["usage"];
 export type EngineOptions = {
   md: string; llm: Llm; examStore: ExamStore;
   target: string; division: string; engine?: ModelAlias; interviewer: ModelAlias;
+  /** 출제 면접관 모델 (없으면 interviewer) */
+  generator?: ModelAlias;
   seed?: number; screenAll: boolean; freshExam?: boolean;
   /** 공격 편성 시드용 서버 비밀값. 없으면 로컬용 고정값 (core/exam.ts attackSeedOf). */
   examSecret?: string;
@@ -45,7 +47,7 @@ async function createContext(opts: EngineOptions) {
     caveats.push(`타겟 모델 ${opts.target}용 엔진 어댑터가 없어 Claude ${engine}에서 실행함. 체급 제도 취지(타겟 엔진에서 면접)와 다르므로 1차 이후 결과는 참고용.`);
   }
   const ctx: Context = {
-    md: opts.md, llm: opts.llm, target: opts.target, engine, interviewer: opts.interviewer, rng: mulberry32(seed),
+    md: opts.md, llm: opts.llm, target: opts.target, engine, interviewer: opts.interviewer, generator: opts.generator, rng: mulberry32(seed),
     exam: await openExam(opts.md, { store: opts.examStore, fresh: opts.freshExam, secret: opts.examSecret }),
     screenSampleRate: opts.screenAll ? 1 : 0.1,
     log: opts.log ?? (() => {}),
@@ -115,7 +117,7 @@ export function nextChallenge(results: StageResults): Challenge | null {
 
 export type ChallengeReport = {
   challenge: Challenge; startedAt: string; backend: string; caveats: string[];
-  config: { target: string; division: string; engine: ModelAlias; interviewer: ModelAlias; seed: number; exam: string };
+  config: { target: string; division: string; engine: ModelAlias; interviewer: ModelAlias; generator: ModelAlias; seed: number; exam: string };
   passed: boolean; securityBan?: StageOutcome["securityBan"]; result: string;
   /** 이번에 돈 단계만 담는다 (서류 도전이면 security + doc) */
   stages: StageResults;
@@ -154,7 +156,7 @@ export async function runChallenge(opts: EngineOptions, challenge: Challenge, pr
     : `✅ ${name} 합격`;
   return {
     challenge, startedAt, backend: opts.llm.backend, caveats,
-    config: { target: opts.target, division: opts.division, engine, interviewer: opts.interviewer, seed, exam: opts.freshExam ? "fresh" : ctx.exam.quarter },
+    config: { target: opts.target, division: opts.division, engine, interviewer: opts.interviewer, generator: opts.generator ?? opts.interviewer, seed, exam: opts.freshExam ? "fresh" : ctx.exam.quarter },
     passed: outcome.passed && !outcome.securityBan, securityBan: outcome.securityBan, result, stages, usage: ctx.usage,
   };
 }
@@ -169,7 +171,7 @@ export type InterviewOptions = EngineOptions & {
 
 export type InterviewReport = {
   agent: string; startedAt: string; backend: string; caveats: string[];
-  config: { target: string; division: string; engine: ModelAlias; interviewer: ModelAlias; seed: number; exam: string };
+  config: { target: string; division: string; engine: ModelAlias; interviewer: ModelAlias; generator: ModelAlias; seed: number; exam: string };
   reached: Stage; result: string; stages: StageResults;
   usage: Usage;
 };
@@ -178,7 +180,7 @@ export async function interview(opts: InterviewOptions): Promise<InterviewReport
   const { ctx, engine, seed, caveats } = await createContext(opts);
   const report: InterviewReport = {
     agent: opts.agentName, startedAt: new Date().toISOString(), backend: opts.llm.backend, caveats,
-    config: { target: opts.target, division: opts.division, engine, interviewer: opts.interviewer, seed, exam: opts.freshExam ? "fresh" : ctx.exam.quarter },
+    config: { target: opts.target, division: opts.division, engine, interviewer: opts.interviewer, generator: opts.generator ?? opts.interviewer, seed, exam: opts.freshExam ? "fresh" : ctx.exam.quarter },
     reached: "security", result: "", stages: {}, usage: ctx.usage,
   };
 
