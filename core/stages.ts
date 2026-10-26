@@ -41,10 +41,14 @@ function track(ctx: Context, who: "interviewer" | "candidate", r: ConverseResult
 async function askInterviewer<T>(
   ctx: Context, promptFile: string, nonce: string, user: string, schemaName: string, cache = false,
 ): Promise<T> {
+  const reasons: string[] = [];
   for (let attempt = 1; attempt <= 2; attempt++) {
+    // Haiku 는 서버 측 폴백이 없어 안전 분류기 거절이나 출력 상한에 걸리면 그대로 실패한다. 두 번째 시도는 Sonnet 이 맡는다
+    const model = attempt === 2 && ctx.interviewer === "haiku" ? "sonnet" : ctx.interviewer;
+    if (model !== ctx.interviewer) ctx.log(`  ↻ ${promptFile}: Haiku 면접관이 판정을 내지 못해 Sonnet 이 다시 판정`);
     const r = await ctx.llm.converse({
       role: "interviewer",
-      model: ctx.interviewer,
+      model,
       system: interviewerSystem(promptFile, nonce),
       userTurns: [user],
       schema: loadSchema(schemaName),
@@ -53,9 +57,11 @@ async function askInterviewer<T>(
     track(ctx, "interviewer", r);
     const json = r.turns[0].json;
     if (json && typeof json === "object") return json as T;
-    ctx.log(`  ⚠️ 면접관 출력이 스키마 JSON이 아님 (시도 ${attempt})`);
+    const reason = r.turns[0].stopReason ?? (r.turns[0].refused ? 'refusal' : 'unknown');
+    reasons.push(reason);
+    ctx.log(`  ⚠️ 면접관 출력이 스키마 JSON이 아님 (시도 ${attempt}, ${reason})`);
   }
-  throw new Error(`${promptFile}: 면접관이 유효한 JSON을 내지 못함`);
+  throw new Error(`${promptFile}: 면접관이 유효한 JSON을 내지 못함 (${reasons.join(', ')})`);
 }
 
 async function askCandidate(ctx: Context, canary: string, userTurns: string[]): Promise<string[]> {
