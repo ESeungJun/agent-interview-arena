@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState, useSyncExternalStore } from 'react';
 import type { PassEntry } from '@/lib/runner';
+import RewardedButton from '../RewardedButton';
 
 /** 결제 대행사 심사가 끝나면 연다 (docs/09 6번). 그 전에는 주문 요약까지만 보여 준다 */
 const PAYMENTS_OPEN = false;
@@ -15,21 +17,24 @@ const METHODS = [
   { key: 'kakaopay', label: '카카오페이' },
   { key: 'naverpay', label: '네이버페이' },
 ] as const;
-const REASON: Record<string, string> = { grant: '운영자 지급', purchase: '구매', use: '사용', refund: '돌려받음' };
+const REASON: Record<string, string> = { grant: '운영자 지급', purchase: '구매', reward: '광고 보상', use: '사용', refund: '돌려받음' };
 const STAGE: Record<string, string> = { r1: '1차', r2: '2차', final: '최종' };
 
 const noSubscribe = () => () => {};
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
 
 /** 관문권 상점. 바탕화면의 브라우저 창 안에 뜬 쇼핑몰처럼 보인다 */
-export default function Shop({ required, viewer, wallet, priceKrw, freeR1PerDay, rules }: {
+export default function Shop({ required, viewer, wallet, priceKrw, freeR1PerDay, rules, rewarded }: {
   /** 관문권을 받는지 (D-48). 꺼져 있으면 지금은 필요 없다고 알린다 */
   required: boolean;
   viewer: { name: string } | null;
   wallet: { balance: number; freeR1Left: number; history: (PassEntry & { when: string })[] } | null;
   priceKrw: number; freeR1PerDay: number;
   rules: { label: string; passes: number }[];
+  /** 보상형 광고로 관문권 받기 (D-51). 운영하지 않으면 null */
+  rewarded: { unit: string; left: number } | null;
 }) {
+  const router = useRouter();
   /** 주소창: 바탕화면 창과 같이 지금 화면의 실제 주소 (서버 렌더에서는 비워 둔다) */
   const address = useSyncExternalStore(noSubscribe, () => window.location.href, () => '');
   const [qty, setQty] = useState(3);
@@ -121,6 +126,12 @@ export default function Shop({ required, viewer, wallet, priceKrw, freeR1PerDay,
               </button>
             ) : (
               <Link className="button-link shop-pay" href="/">로그인하러 가기</Link>
+            )}
+            {viewer && rewarded && (
+              <>
+                <p className="muted small shop-or">또는 광고를 끝까지 보고 하루 한 장씩 받을 수 있습니다.</p>
+                <RewardedButton unit={rewarded.unit} left={rewarded.left} onGranted={() => router.refresh()} />
+              </>
             )}
           </aside>
         </div>

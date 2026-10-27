@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getViewer } from '@/lib/auth';
-import { DIVISIONS, GATE } from '@/lib/policy';
+import { DIVISIONS, GATE, rewardedOffer } from '@/lib/policy';
 import { accountCounts, passHistory } from '@/lib/runner';
 import Shop from './Shop';
 
@@ -19,15 +19,15 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   const back = safeReturn((await searchParams).from);
   const viewer = await getViewer();
   const wallet = viewer
-    ? await Promise.all([accountCounts(viewer.id), passHistory(viewer.id)]).then(([{ balance, freeR1Used }, history]) => ({
-        balance, freeR1Left: Math.max(0, GATE.freeR1PerDay - freeR1Used), history: history.map(h => ({ ...h, when: when(h.at) })),
+    ? await Promise.all([accountCounts(viewer.id), passHistory(viewer.id)]).then(([{ balance, freeR1Used, rewardsUsed }, history]) => ({
+        balance, rewardsUsed, freeR1Left: Math.max(0, GATE.freeR1PerDay - freeR1Used), history: history.map(h => ({ ...h, when: when(h.at) })),
       }))
     : null;
   const rules = (Object.values(DIVISIONS)).map(d => ({ label: d.label, passes: d.passesPerGate }));
   return (
     <main className="shop-page">
       <p className="back-link"><Link href={back}>← {back === '/' ? '바탕화면으로' : '면접장으로'}</Link></p>
-      <Shop required={GATE.required} viewer={viewer ? { name: viewer.name } : null} wallet={wallet} priceKrw={GATE.priceKrw} freeR1PerDay={GATE.freeR1PerDay} rules={rules} />
+      <Shop required={GATE.required} viewer={viewer ? { name: viewer.name } : null} wallet={wallet} priceKrw={GATE.priceKrw} freeR1PerDay={GATE.freeR1PerDay} rules={rules} rewarded={wallet ? rewardedOffer(wallet.rewardsUsed) : null} />
     </main>
   );
 }

@@ -492,3 +492,19 @@ main.shop-page { max-width: min(1120px, 94vw); }
 .button-link.gold { background: var(--gold); color: var(--ink); font-family: var(--font-pixel); }
 @media (max-width: 760px) { .desktop-icon .icon-emoji { width: 40px; height: 40px; font-size: 30px; } }
 a.desktop-icon { text-decoration: none; }
+
+/* ── 광고 (D-51) ─────────────────────────────────────────────────
+ * 화면 내용과 헷갈리지 않게 "광고" 표시를 위에 붙이고 도트 창 테두리를 쓰지 않는다 (콘텐츠로 위장하지 않기) */
+.ad-slot { margin: 16px auto; max-width: 728px; padding: 6px; background: var(--white); color: var(--muted); border: 1px solid var(--window-edge); }
+.ad-label { display: block; margin-bottom: 4px; font-size: 11px; letter-spacing: 0.05em; color: var(--muted); }
+.ad-preview { display: grid; place-items: center; min-height: 90px; border: 2px dashed var(--window-edge); font-size: 12px; }
+.rewarded { margin-top: 8px; }
+.rewarded button { width: 100%; }
+.shop-or { margin: 12px 0 0; }
+.taskbar .privacy-link { font: 11px var(--font-pixel); color: var(--black); }
+
+/* ── 개인정보 처리방침 ─────────────────────────────────────────── */
+main.policy-page { max-width: min(760px, 94vw); }
+.policy h1 { margin-top: 0; }
+.policy h2 { margin-top: 20px; font-size: 16px; }
+.policy li { margin: 4px 0; line-height: 1.6; }
