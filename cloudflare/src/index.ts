@@ -24,12 +24,25 @@ type Env = {
   ARENA_INTERVIEWER?: string;
   /** 출제 면접관 모델. 없으면 ARENA_INTERVIEWER (D-49) */
   ARENA_GENERATOR?: string;
+  /** 1 이면 서류 다음 관문에 관문권을 받는다 (D-48) */
+  ARENA_PASSES_REQUIRED?: string;
+  /** 광고 (D-51): 애드센스 게시자 ID·자리별 광고 단위, 보상형 광고 단위, 하루 보상 상한, 자리 점검용 점선 상자 */
+  ARENA_ADSENSE_CLIENT?: string;
+  ARENA_AD_SLOT_HALL?: string;
+  ARENA_AD_SLOT_WAITING?: string;
+  ARENA_AD_REWARDED_UNIT?: string;
+  ARENA_REWARDED_PER_DAY?: string;
+  ARENA_ADS_PREVIEW?: string;
+  /** 개인정보 처리방침의 문의처 */
+  ARENA_CONTACT_EMAIL?: string;
 };
 
 /** 컨테이너에 넘길 변수 (wrangler secret / vars 에서 읽는다) */
 const PASSED = [
   'ANTHROPIC_API_KEY', 'DATABASE_URL', 'DATABASE_CA_CERT', 'NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY',
   'SITE_URL', 'ARENA_BYOK_SECRET', 'ARENA_EXAM_SECRET', 'ARENA_ADMIN_EMAILS', 'ARENA_INTERVIEWER', 'ARENA_GENERATOR',
+  'ARENA_PASSES_REQUIRED', 'ARENA_ADSENSE_CLIENT', 'ARENA_AD_SLOT_HALL', 'ARENA_AD_SLOT_WAITING', 'ARENA_AD_REWARDED_UNIT',
+  'ARENA_REWARDED_PER_DAY', 'ARENA_ADS_PREVIEW', 'ARENA_CONTACT_EMAIL',
 ] as const;
 
 export class Arena extends Container<Env> {

@@ -11,7 +11,7 @@ before(async () => {
   await db.query("insert into accounts (id, display_name) values ('u1', '하울'), ('u2', '다른 사람')");
 });
 
-const { submitApplication, reviseApplication, challengeState, ticketsUsedToday, suspendedUntil, startChallenge, passBalance, freeR1UsedToday, revealAttempt, ownedApplication } = await import('./runner.ts');
+const { submitApplication, reviseApplication, challengeState, ticketsUsedToday, suspendedUntil, startChallenge, passBalance, freeR1UsedToday, revealAttempt, ownedApplication, claimReward, accountCounts } = await import('./runner.ts');
 const { getApplication, mutateApplication, appendLogs } = await import('./store.ts');
 const { leaderboard } = await import('./leaderboard.ts');
 
@@ -205,4 +205,22 @@ test('진행 로그는 그 단계 로그 끝에만 덧붙는다', async () => {
   const a = (await getApplication(c.id))!.versions.at(-1)!.attempts;
   assert.deepEqual(a.final!.logs, ['첫 줄', '둘째 줄', '셋째 줄']);
   assert.equal(a.final!.status, 'queued');
+});
+
+test('보상형 광고 관문권은 하루 상한까지만 받고, 동시에 보내도 넘지 않는다 (D-51)', async () => {
+  const before = await passBalance('u2');
+  const results = await Promise.all([claimReward('u2'), claimReward('u2'), claimReward('u2')]);
+  assert.equal(results.filter(r => r.ok).length, 1, '하루 1장');
+  const denied = results.find(r => !r.ok) as { status: number; message: string };
+  assert.equal(denied.status, 429);
+  assert.match(denied.message, /하루 1장/);
+  assert.equal(await passBalance('u2'), before + 1);
+  assert.equal((await accountCounts('u2')).rewardsUsed, 1);
+  // 어제 받은 것은 오늘 상한에 들어가지 않는다
+  await db.query("update pass_ledger set created_at = now() - interval '2 days' where account_id = 'u2' and reason = 'reward'");
+  const again = await claimReward('u2');
+  assert.equal(again.ok, true);
+  assert.equal(again.ok && again.counts.rewardsUsed, 1);
+  assert.equal(again.ok && again.counts.balance, before + 2);
+  assert.equal((await claimReward('nobody')).ok, false, '없는 계정');
 });

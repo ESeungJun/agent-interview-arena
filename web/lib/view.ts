@@ -9,7 +9,7 @@ import { after } from 'next/server';
 import { PASS_LINE } from '../../core/scoring.ts';
 import { assignCharacter } from './character.ts';
 import { estimateDurations } from './durations.ts';
-import { DIVISIONS, GATE, MODEL_LABEL } from './policy.ts';
+import { adSlot, DIVISIONS, GATE, MODEL_LABEL, rewardedOffer } from './policy.ts';
 import { publicVersion } from './public-version.ts';
 import { accountCounts, challengeState, type AccountCounts } from './runner.ts';
 import { currentVersion, type Application } from './store.ts';
@@ -19,7 +19,7 @@ export async function applicationView(app: Application, counts?: AccountCounts) 
   if (!app.character) after(() => assignCharacter(app.id, currentVersion(app).md));
   const division = DIVISIONS[app.division];
   // DB 가 컨테이너와 다른 지역에 있어 왕복 한 번이 비싸다. 서로 기다릴 필요 없는 조회는 함께 보낸다
-  const [{ docUsed, freeR1Used, balance }, estimates] = await Promise.all([counts ?? accountCounts(app.ownerId), estimateDurations()]);
+  const [{ docUsed, freeR1Used, rewardsUsed, balance }, estimates] = await Promise.all([counts ?? accountCounts(app.ownerId), estimateDurations()]);
   return {
     id: app.id,
     agentName: app.agentName,
@@ -39,7 +39,11 @@ export async function applicationView(app: Application, counts?: AccountCounts) 
       passesPerGate: division.passesPerGate,
       balance,
       priceKrw: GATE.priceKrw,
+      /** 보상형 광고로 관문권 받기 (D-51). 관문권을 받지 않거나 광고 단위가 없으면 null */
+      rewarded: rewardedOffer(rewardsUsed),
     },
+    /** 면접이 도는 동안 아래에 두는 광고 자리 */
+    waitingAd: adSlot('waiting'),
     versions: app.versions.map(publicVersion),
     ...challengeState(app),
     passLines: PASS_LINE,

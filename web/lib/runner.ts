@@ -9,7 +9,7 @@ import { MAX_MD_BYTES } from '../../core/gate.ts';
 import { CHALLENGES, nextChallenge, STAGE_NAMES, STAGES, type Challenge, type StageResults } from '../../core/interview.ts';
 import { sealKey, verifyKey } from './byok.ts';
 import { getDb, type Query } from './db.ts';
-import { DIVISIONS, GATE, LIMITS, startOfTodayKst, WARNING, type Division, type Effort } from './policy.ts';
+import { ADS, DIVISIONS, GATE, LIMITS, startOfTodayKst, WARNING, type Division, type Effort } from './policy.ts';
 import { takeKeyCheck } from './limits.ts';
 import { createApplication, currentVersion, listByOwner, mutateApplication, removeApplication, type Application, type Version } from './store.ts';
 
@@ -154,8 +154,8 @@ export async function freeR1UsedToday(accountId: string, q?: Query): Promise<num
   return Number(n);
 }
 
-/** 화면에 보여 줄 계정 수치: 오늘 쓴 서류 티켓(체급별)·무료 1차, 관문권 잔액 */
-export type AccountCounts = { docUsed: Record<Division, number>; freeR1Used: number; balance: number };
+/** 화면에 보여 줄 계정 수치: 오늘 쓴 서류 티켓(체급별)·무료 1차·보상형 광고로 받은 관문권, 관문권 잔액 */
+export type AccountCounts = { docUsed: Record<Division, number>; freeR1Used: number; rewardsUsed: number; balance: number };
 
 /**
  * AccountCounts 를 세는 SQL 조각. 지원서 조회·결과 열기 같은 다른 문장에 붙여 왕복 한 번에 함께 읽는다
@@ -165,19 +165,39 @@ export const countsSql = (owner: string, day: string) => `
   (select coalesce(jsonb_object_agg(division, n), '{}'::jsonb) from (
      select division, count(*) as n from tickets where account_id = ${owner} and challenge = 'doc' and used_at >= ${day} group by division) t) as doc_used,
   (select count(*) from tickets where account_id = ${owner} and challenge = 'r1' and used_at >= ${day}) as r1_used,
+  (select count(*) from pass_ledger where account_id = ${owner} and reason = 'reward' and created_at >= ${day}) as rewards_used,
   (select coalesce(sum(delta), 0) from pass_ledger where account_id = ${owner}) as balance`;
 
-export type CountsRow = { doc_used: Partial<Record<Division, string | number>>; r1_used: string | number; balance: string | number | null };
+export type CountsRow = { doc_used: Partial<Record<Division, string | number>>; r1_used: string | number; rewards_used: string | number; balance: string | number | null };
 
 export function toCounts(r: CountsRow): AccountCounts {
   const docUsed: Record<Division, number> = { light: 0, middle: 0, open: 0 };
   for (const [d, n] of Object.entries(r.doc_used ?? {})) docUsed[d as Division] = Number(n);
-  return { docUsed, freeR1Used: Number(r.r1_used), balance: Number(r.balance ?? 0) };
+  return { docUsed, freeR1Used: Number(r.r1_used), rewardsUsed: Number(r.rewards_used ?? 0), balance: Number(r.balance ?? 0) };
 }
 
 export async function accountCounts(accountId: string): Promise<AccountCounts> {
   const [row] = await (await getDb()).query<CountsRow>(`select ${countsSql('$1', '$2')}`, [accountId, startOfTodayKst()]);
   return toCounts(row);
+}
+
+/**
+ * 보상형 광고를 끝까지 본 계정에 관문권 1장을 준다 (D-51). 계정당 하루 ADS.rewardedPerDay 장까지.
+ * 웹 보상형 광고는 서버 측 확인이 없어 브라우저의 "보상 지급" 신호를 믿는다. 그래서 하루 상한이 실제 방어선이다
+ * (광고 없이 이 요청만 보내도 하루 1장 이상은 받을 수 없다). 계정 행을 잠가 동시에 보낸 요청이 상한을 함께 넘지 않게 한다
+ */
+export async function claimReward(accountId: string): Promise<{ ok: true; counts: AccountCounts } | Fail> {
+  return (await getDb()).tx(async q => {
+    const [row] = await q<CountsRow>(
+      `select ${countsSql('$1', '$2')} from (select id from accounts where id = $1 for update) a`, [accountId, startOfTodayKst()]);
+    if (!row) return { ok: false, status: 404, message: '계정이 없습니다.' };
+    if (Number(row.rewards_used) >= ADS.rewardedPerDay) {
+      return { ok: false, status: 429, message: `광고로 받는 관문권은 하루 ${ADS.rewardedPerDay}장까지입니다. 내일 다시 받을 수 있습니다.` };
+    }
+    await q("insert into pass_ledger (account_id, delta, reason, note) values ($1, 1, 'reward', 'rewarded ad')", [accountId]);
+    const counts = toCounts(row);
+    return { ok: true, counts: { ...counts, rewardsUsed: counts.rewardsUsed + 1, balance: counts.balance + 1 } };
+  });
 }
 
 const UUID = /^[0-9a-f-]{36}$/i;

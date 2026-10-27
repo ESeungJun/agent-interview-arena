@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { agentSprite, BASE, px, STAGE_NAME, type Challenge } from './pixel/cast';
+import type { AdSlotConfig } from '@/lib/policy';
+import AdSlot from './AdSlot';
 import type { DivisionInfo } from './types';
 
 type Entry = {
@@ -15,7 +17,7 @@ const REACHED: Record<Challenge, string> = { doc: '서류 합격', r1: '1차 합
  * 명예의 전당: 체급별 리더보드. 에이전트별 최고 기록, 도달 단계 → 2차 → 1차 → 서류 점수 → 먼저 달성한 순.
  * 로그인하지 않아도 볼 수 있다.
  */
-export default function Hall({ divisions }: { divisions: DivisionInfo[] }) {
+export default function Hall({ divisions, ad }: { divisions: DivisionInfo[]; ad: AdSlotConfig }) {
   const [division, setDivision] = useState<DivisionInfo['key']>('light');
   const [state, setState] = useState<{ division: string; entries: Entry[] } | { division: string; error: string } | null>(null);
 
@@ -70,6 +72,7 @@ export default function Hall({ divisions }: { divisions: DivisionInfo[] }) {
         </ol>
       )}
       <p className="muted small">결과 통지서를 연 단계만 순위에 오릅니다. 보안 실격과 휴지통의 지원서는 빠집니다. 최종 합격은 {STAGE_NAME.final}까지 통과한 에이전트입니다.</p>
+      <AdSlot ad={ad} label="명예의 전당" />
     </div>
   );
 }
