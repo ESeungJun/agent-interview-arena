@@ -52,6 +52,42 @@ export const GATE = {
   priceKrw: 990,
 };
 
+/**
+ * 광고 (D-51). 값이 없으면 광고 칸을 그리지 않는다. 배포 변수로 켜고 끌 수 있게 서버에서 읽어 화면에 넘긴다
+ * (NEXT_PUBLIC_ 변수는 빌드할 때 박혀서 배포 뒤에 바꿀 수 없다)
+ */
+const env = (key: string, pattern: RegExp) => (pattern.test(process.env[key] ?? '') ? process.env[key]! : '');
+export const ADS = {
+  /** 애드센스 게시자 ID (ca-pub-…) */
+  client: env('ARENA_ADSENSE_CLIENT', /^ca-pub-\d{10,20}$/),
+  /** 자리별 애드센스 광고 단위 ID */
+  slots: {
+    /** 명예의 전당 목록 아래 */
+    hall: env('ARENA_AD_SLOT_HALL', /^\d{5,20}$/),
+    /** 면접이 도는 동안 면접장 아래 (몇 분씩 기다리는 자리) */
+    waiting: env('ARENA_AD_SLOT_WAITING', /^\d{5,20}$/),
+  },
+  /** 보상형 광고 단위 경로 (Google Ad Manager, /네트워크코드/단위이름). 없으면 "광고 보고 관문권 받기"를 숨긴다 */
+  rewardedUnit: env('ARENA_AD_REWARDED_UNIT', /^\/\d+\/[\w.\-/]+$/),
+  /** 보상형 광고로 받을 수 있는 관문권 (계정당 하루) */
+  rewardedPerDay: num(process.env.ARENA_REWARDED_PER_DAY, 1),
+  /** 광고 대신 점선 상자를 그려 자리를 확인한다 (계정 승인 전 화면 점검용) */
+  preview: process.env.ARENA_ADS_PREVIEW === '1',
+};
+export type AdPlacement = keyof typeof ADS.slots;
+/** 화면에 넘기는 광고 자리 하나. null 이면 그리지 않는다 */
+export type AdSlotConfig = { client: string; slot: string } | { preview: true } | null;
+
+export function adSlot(placement: AdPlacement): AdSlotConfig {
+  if (ADS.client && ADS.slots[placement]) return { client: ADS.client, slot: ADS.slots[placement] };
+  return ADS.preview ? { preview: true } : null;
+}
+
+/** 보상형 광고로 관문권 받기 (D-51). 관문권을 받지 않으면(GATE.required 꺼짐) 받을 이유가 없어 숨긴다 */
+export function rewardedOffer(usedToday: number): { unit: string; left: number } | null {
+  return GATE.required && ADS.rewardedUnit ? { unit: ADS.rewardedUnit, left: Math.max(0, ADS.rewardedPerDay - usedToday) } : null;
+}
+
 export const WARNING = { windowDays: 90, limit: 3, suspendDays: 30 };
 
 /** 비용 상한 (공개판은 응시자를 예측할 수 없어 티켓과 별도로 둔다) */

@@ -2,6 +2,9 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { AdSlotConfig } from '@/lib/policy';
+import AdSlot from '../../AdSlot';
+import RewardedButton from '../../RewardedButton';
 import AgentCard, { type AgentMood } from '../../pixel/AgentCard';
 import Backdrop from '../../pixel/Backdrop';
 import Corridor, { DOORS, maskedState } from '../../pixel/Corridor';
@@ -36,7 +39,9 @@ type Application = {
   /** 오늘 이 체급에서 쓴 제출 티켓 */
   tickets: { used: number; perDay: number };
   /** 서류 다음 관문 비용 (lib/view.ts) */
-  gate: { required: boolean; freeR1Left: number; passesPerGate: number; balance: number; priceKrw: number };
+  gate: { required: boolean; freeR1Left: number; passesPerGate: number; balance: number; priceKrw: number; rewarded: { unit: string; left: number } | null };
+  /** 면접이 도는 동안 아래에 두는 광고 자리 (D-51) */
+  waitingAd: AdSlotConfig;
   passLines: PassLines;
   estimates?: Record<Challenge, Estimate>;
 };
@@ -268,6 +273,7 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
               </p>
               {focus !== 'doc' && st !== 'error' && <p className={short ? 'gate-short' : 'muted small'}>{gateText}</p>}
               {short && st !== 'error' && <p><Link className="button-link gold" href={`/shop?from=/a/${id}`}>🎟️ 관문권 상점 가기</Link></p>}
+              {short && st !== 'error' && gate.rewarded && <RewardedButton unit={gate.rewarded.unit} left={gate.rewarded.left} onGranted={() => void load()} />}
               {app.byok && (
                 <label className="key-field">
                   <span>내 Anthropic API 키 ({app.engineLabel} 지원자 호출에만 씁니다. 저장하지 않습니다)</span>
@@ -307,6 +313,9 @@ export default function ApplicationView({ id, initial }: { id: string; initial: 
           )}
         </Dialog>
       )}
+
+      {/* 면접은 몇 분씩 걸린다. 기다리는 동안에만 면접장 아래에 광고를 둔다 (면접관 대사·버튼과 떨어뜨려 둔다) */}
+      {app.running && <AdSlot ad={app.waitingAd} label="면접 대기" />}
 
       {canRevise && ticketsLeft === 0 && (
         <section className="card">

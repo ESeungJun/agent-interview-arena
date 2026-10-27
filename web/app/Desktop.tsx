@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import ApplyForm, { type Revisable } from './ApplyForm';
+import type { AdSlotConfig } from '@/lib/policy';
 import Hall from './Hall';
 import Login from './Login';
 import { MiniDoors } from './pixel/Corridor';
@@ -36,11 +37,13 @@ export type HistoryItem = {
 };
 
 /** 홈 = 내 컴퓨터 바탕화면. 채용 포스터 브라우저 창을 열어 둔 채로 시작하고, 지난 지원 이력·명예의 전당·휴지통은 아이콘으로 연다 */
-export default function Desktop({ viewer, loginMode, supabase, history, revisable, divisions, interviewer, passesRequired }: {
+export default function Desktop({ viewer, loginMode, supabase, history, revisable, divisions, interviewer, passesRequired, hallAd }: {
   viewer: { name: string } | null; loginMode: LoginMode; supabase?: SupabasePublic;
   history: HistoryItem[]; revisable: Revisable[]; divisions: DivisionInfo[]; interviewer: string;
   /** 관문권을 받는지 (D-48). 꺼져 있으면 상점 아이콘과 관문권 안내를 숨긴다 */
   passesRequired: boolean;
+  /** 명예의 전당 목록 아래 광고 자리 (D-51) */
+  hallAd: AdSlotConfig;
 }) {
   const router = useRouter();
   const [browserOpen, setBrowserOpen] = useState(true);
@@ -306,7 +309,7 @@ export default function Desktop({ viewer, loginMode, supabase, history, revisabl
             <button type="button" className="window-close" aria-label="명예의 전당 창 닫기" onClick={() => setHallOpen(false)}>×</button>
           </header>
           <div className="window-body">
-            <Hall divisions={divisions} />
+            <Hall divisions={divisions} ad={hallAd} />
           </div>
         </section>
       )}
@@ -338,6 +341,7 @@ export default function Desktop({ viewer, loginMode, supabase, history, revisabl
           <button type="button" className="task who" onClick={goApply}>로그인</button>
         )}
         <span className="clock" aria-label="현재 시각">{clock}</span>
+        <Link className="privacy-link" href="/privacy">개인정보</Link>
       </footer>
     </div>
   );
