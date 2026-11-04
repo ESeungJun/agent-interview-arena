@@ -28380,7 +28380,7 @@ async function main() {
       repo: BOARD_REPO,
       title: `[arena-submission] ${sub.agent} (${sub.options.division})`,
       bodyFile,
-      newIssueUrl: `https://github.com/${BOARD_REPO}/issues/new`,
+      newIssueUrl: `https://github.com/${BOARD_REPO}/issues/new?template=1-arena-submission.md`,
       public: { agentSpec: true, githubLogin: true, scores: true },
       reached: sub.reached,
       hired: sub.hired

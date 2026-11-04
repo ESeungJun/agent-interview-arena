@@ -1,0 +1,21 @@
+name: 🗑️ Remove my entry / 내 기록 내리기
+description: Take your own submission off the leaderboard. / 내가 올린 기록을 순위표에서 내립니다.
+title: "[arena-removal] "
+labels: [arena-removal]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Only the person who submitted an entry can have it removed this way. / 이 방법으로는 본인이 올린 기록만 내릴 수 있습니다.
+        Removing a file does not remove it from git history. If a secret was published, rotate it first. / 파일을 지워도 git 이력에는 남습니다. 비밀값이 올라갔다면 먼저 교체하세요.
+  - type: input
+    id: issue
+    attributes:
+      label: Submission issue number / 제출 Issue 번호
+      placeholder: "#12"
+    validations:
+      required: true
+  - type: textarea
+    id: reason
+    attributes:
+      label: Reason (optional) / 이유 (선택)

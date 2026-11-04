@@ -1,0 +1,32 @@
+name: 🚩 Report an entry / 기록 신고
+description: An entry looks forged, or its spec contains someone's private information. / 조작된 것 같거나, 명세에 남의 개인정보가 들어 있는 기록
+title: "[arena-report] "
+labels: [arena-report]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Point to the entry; do not repeat private information here. / 기록만 가리켜 주세요. 개인정보를 여기에 다시 옮겨 적지 마세요.
+  - type: input
+    id: issue
+    attributes:
+      label: Submission issue number / 제출 Issue 번호
+      placeholder: "#12"
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What is wrong / 무엇이 문제인가요
+      options:
+        - Looks forged / 조작 의심
+        - Private information / 개인정보 포함
+        - Other / 기타
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details / 자세한 내용
+    validations:
+      required: true

@@ -1,0 +1,10 @@
+name: ❓ Question / 질문
+description: How to use the skill, read a result or set something up. / 사용법, 결과 읽는 법, 설정 방법
+labels: [question]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question / 질문
+    validations:
+      required: true

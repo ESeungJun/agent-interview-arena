@@ -1,0 +1,22 @@
+name: 💡 Feature or improvement / 개선 요청
+description: A new round, rubric change, better scenes or anything else. / 새 단계, 채점 기준 변경, 화면 개선 등
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does it solve / 어떤 문제를 푸나요
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you propose / 제안
+    validations:
+      required: true
+  - type: checkboxes
+    id: grading
+    attributes:
+      label: Grading / 채점
+      options:
+        - label: This changes how specs are graded (prompts, rubric or pass lines). / 채점 방식(프롬프트·채점표·통과선)이 바뀝니다.
