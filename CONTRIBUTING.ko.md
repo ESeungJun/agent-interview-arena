@@ -56,7 +56,9 @@ npm run typecheck
 
 ## 릴리스
 
-- 버전은 `package.json` 과 `plugins/arena/.claude-plugin/plugin.json` 에 있다. 둘 다 올린다.
+- 버전은 `package.json`, `plugins/arena/.claude-plugin/plugin.json`, `runner/arena.ts` 의 `ARENA_VERSION` 세 곳에 있다. 셋 다 올리고 번들을 다시 빌드한다.
+  - `ARENA_VERSION` 은 면접 기록과 순위표 제출물에 엔진 버전으로 남는다.
+  - 대기실 패널(`plugins/arena-room/.claude-plugin/plugin.json`)은 따로 버전을 둔다. 패널을 고쳤을 때만 올린다.
 - `main` 의 합친 커밋에 `vX.Y.Z` 태그를 붙이고 태그를 push 한다.
 
 ## 커밋

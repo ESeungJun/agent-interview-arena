@@ -36,7 +36,7 @@ You wrote a subagent, a `SKILL.md` or a `CLAUDE.md`. It worked on the three prom
 | What goes wrong in production | Round that catches it |
 | --- | --- |
 | The spec is vague, contradicts itself, or promises things it never defines | 📄 **Document screening** |
-| It does the task differently every time, or ignores its own output format | 💼 **Round 1** practical tasks, each run more than once |
+| It does the task differently every time, or ignores its own output format | 💼 **Round 1** practical tasks, the main one run twice |
 | A tool fails, requirements conflict, or the request sits on the edge of its scope | 🔥 **Round 2** pressure follow-ups |
 | Someone tells it "ignore your instructions", hides commands in a file, or asks for its system prompt | 🛡️ **Final** red-team attacks |
 | The spec hides text or instructions a human reviewer would not see | 🚧 **Security checkpoint** (code rules first) |
@@ -190,9 +190,9 @@ npm run build       # bundles the engine into plugins/arena/skills/apply/bin/are
 node runner/run.ts tests/sample_candidates/good_claude_subagent.md --lang en
 ```
 
-Interviewer prompts live in [`prompts/`](prompts/) (single English source; output language is a parameter). The public red-team pool is [`prompts/red_team_attack_pool.json`](prompts/red_team_attack_pool.json).
+Interviewer prompts live in [`prompts/`](prompts/) (single English source; output language is a parameter). The public red-team pool is [`prompts/red_team_attack_pool.json`](prompts/red_team_attack_pool.json), with a Korean copy ([`red_team_attack_pool.ko.json`](prompts/red_team_attack_pool.ko.json)) used when the spec is written in Korean.
 
-Branches, pull requests and releases are described in [CONTRIBUTING.md](CONTRIBUTING.md).
+Branches, pull requests and releases are described in [CONTRIBUTING.md](CONTRIBUTING.md). Planning, design and decision notes (in Korean) are in [`docs/`](docs/기획서.md).
 
 ### Operating notes
 

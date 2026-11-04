@@ -51,7 +51,9 @@ npm run typecheck
 
 ## Releases
 
-- The version lives in `package.json` and `plugins/arena/.claude-plugin/plugin.json`. Bump both.
+- The version lives in three places: `package.json`, `plugins/arena/.claude-plugin/plugin.json` and `ARENA_VERSION` in `runner/arena.ts`. Bump all three and rebuild the bundle.
+  - `ARENA_VERSION` is recorded as the engine version in interview records and leaderboard submissions.
+  - The waiting-room pane (`plugins/arena-room/.claude-plugin/plugin.json`) has its own version. Bump it only when the pane changes.
 - Tag the merge commit on `main` as `vX.Y.Z` and push the tag.
 
 ## Commits

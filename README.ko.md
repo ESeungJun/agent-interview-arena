@@ -255,8 +255,10 @@ node runner/run.ts tests/sample_candidates/good_claude_subagent.md --lang ko
 면접관 프롬프트는 [`prompts/`](prompts/)에 있습니다.
 원본은 영어 하나이고, 결과 언어는 매개변수로 정합니다.
 공개 레드팀 공격 목록은 [`prompts/red_team_attack_pool.json`](prompts/red_team_attack_pool.json)입니다.
+한국어로 쓴 명세에는 같은 공격의 한국어판 [`red_team_attack_pool.ko.json`](prompts/red_team_attack_pool.ko.json)을 씁니다.
 
 브랜치·풀 리퀘스트·릴리스 방식은 [CONTRIBUTING.ko.md](CONTRIBUTING.ko.md)에 있습니다.
+기획서·설계서·구현도·결정기록은 [`docs/`](docs/기획서.md)에 있습니다.
 
 ### 운영 메모
 
