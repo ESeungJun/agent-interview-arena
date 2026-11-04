@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>구현도 · agent-interview-arena</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<style>
+:root{--bg:#fbfaf8;--panel:#fff;--text:#1f2328;--muted:#656d76;--line:#e6e3de;--accent:#3b5bdb;--accent-soft:#edf2ff;--code:#f4f2ee;--th:#f4f2ee}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15171a;--panel:#1c1f23;--text:#e6e6e3;--muted:#9aa1a9;--line:#2e3238;--accent:#91a7ff;--accent-soft:#232a45;--code:#23262b;--th:#23262b}}
+:root[data-theme="dark"]{--bg:#15171a;--panel:#1c1f23;--text:#e6e6e3;--muted:#9aa1a9;--line:#2e3238;--accent:#91a7ff;--accent-soft:#232a45;--code:#23262b;--th:#23262b}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.75 Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;word-break:keep-all;overflow-wrap:anywhere}
+.layout{display:grid;grid-template-columns:240px minmax(0,1fr) 220px;gap:40px;max-width:1280px;margin:0 auto;padding:32px 24px}
+nav.docs,aside.toc{position:sticky;top:24px;align-self:start;max-height:calc(100vh - 48px);overflow:auto;font-size:14px}
+nav.docs .project{font-weight:700;font-size:15px;margin-bottom:12px}
+nav.docs a,aside.toc a{display:block;color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:8px}
+nav.docs a:hover,aside.toc a:hover{color:var(--text);background:var(--accent-soft)}
+nav.docs a.on{color:var(--accent);background:var(--accent-soft);font-weight:600}
+aside.toc .label{color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em;margin:0 10px 6px}
+aside.toc a.d3{padding-left:22px;font-size:13px}
+main{min-width:0}
+.meta{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:13px;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:8px}
+.meta button{font:inherit;color:var(--muted);background:none;border:1px solid var(--line);border-radius:999px;padding:3px 12px;cursor:pointer}
+h1{font-size:32px;line-height:1.3;margin:24px 0 16px}
+h2{font-size:23px;margin:48px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+h3{font-size:18px;margin:32px 0 8px}
+h1,h2,h3,h4{position:relative;scroll-margin-top:16px}
+.anchor{position:absolute;left:-1em;color:var(--muted);text-decoration:none;opacity:0}
+h1:hover .anchor,h2:hover .anchor,h3:hover .anchor,h4:hover .anchor{opacity:.6}
+a{color:var(--accent)}
+code{font:13.5px/1.6 "JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--code);padding:2px 6px;border-radius:5px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto}
+pre code{background:none;padding:0}
+pre.mermaid{background:var(--panel);text-align:center}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14.5px;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top}
+th{background:var(--th);font-weight:600;white-space:nowrap}
+blockquote{margin:16px 0;padding:8px 16px;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 8px 8px 0;color:var(--text)}
+img{max-width:100%;border-radius:8px}
+hr{border:0;border-top:1px solid var(--line);margin:32px 0}
+li{margin:3px 0}
+@media (max-width:1100px){.layout{grid-template-columns:200px minmax(0,1fr)}aside.toc{display:none}}
+@media (max-width:760px){.layout{display:block;padding:16px}nav.docs{position:static;max-height:none;display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}nav.docs .project{width:100%;margin:0}h1{font-size:26px}}
+@media print{nav.docs,aside.toc,.meta button{display:none}.layout{display:block}}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="docs"><div class="project">agent-interview-arena</div><a href="%EA%B8%B0%ED%9A%8D%EC%84%9C.html">기획서</a><a href="%EC%84%A4%EA%B3%84%EC%84%9C.html">설계서</a><a href="%EA%B5%AC%ED%98%84%EB%8F%84.html" class="on">구현도</a><a href="%EA%B2%B0%EC%A0%95%EA%B8%B0%EB%A1%9D.html">결정기록</a></nav>
+<main>
+<div class="meta"><span>마지막 수정 2026-11-05 · 원본 docs/구현도.md</span><button id="theme" type="button">테마</button></div>
+<h1 id="구현도"><a class="anchor" href="#구현도">#</a>구현도</h1>
+<blockquote>
+<p>2026-11-05에 코드와 git 히스토리에서 정리했다.
+관련 문서: <a href="기획서.html">기획서</a> · <a href="설계서.html">설계서</a> · <a href="결정기록.html">결정기록</a> · 기여 방법은 <a href="../../CONTRIBUTING.ko.md">CONTRIBUTING.ko.md</a></p>
+</blockquote>
+<h2 id="폴더모듈-구조"><a class="anchor" href="#폴더모듈-구조">#</a>폴더·모듈 구조</h2>
+<pre><code class="lang-text">agent-interview-arena/
+├── .claude-plugin/marketplace.json   마켓플레이스: arena, arena-room 두 플러그인
+├── .github/
+│   ├── ISSUE_TEMPLATE/               Issue 양식 6종 + config.yml(빈 Issue 금지, 보안 신고 링크)
+│   └── workflows/leaderboard.yml     순위표 제출 처리 (Issue 열림 + 15분마다)
+├── core/                             면접 엔진. 파일·프로세스·환경 변수를 쓰지 않는다
+├── runner/                           로컬 연결부: 스킬용 CLI, 실행기, 순위표, 측정 도구
+├── prompts/                          면접관 프롬프트(영어 원본)와 공개 레드팀 공격 풀(영어·한국어)
+│   └── shared/security_preamble.md   면접관 공통 보안 머리말
+├── schemas/                          면접관 출력 JSON 스키마
+├── plugins/
+│   ├── arena/                        본 플러그인
+│   │   ├── .claude-plugin/plugin.json
+│   │   └── skills/apply/             SKILL.md, submit.md, scenes.md, bin/arena.mjs(번들 엔진)
+│   └── arena-room/                   대기실 패널 mod (hooks/register.tsx, types/, tests/)
+├── leaderboard/accepted_prompts.json 순위표가 받는 프롬프트 해시 목록
+├── docs/                             GitHub Pages 루트 (순위표) + 이 문서들
+│   ├── index.html                    순위표 페이지
+│   ├── leaderboard.json              봇이 만드는 순위 (손으로 고치지 않는다)
+│   ├── submissions/                  받은 제출 (손으로 고치지 않는다)
+│   ├── 기획서.md · 설계서.md · 구현도.md · 결정기록.md
+│   └── html/                         위 문서의 html 판
+└── tests/
+    ├── sample_candidates/            회귀 샘플 명세 6종 + expected.json
+    └── fixtures/full_report.json     테스트용 전체 면접 결과</code></pre>
+<ul>
+<li><code>docs/</code>는 GitHub Pages가 그대로 내보낸다(<code>.nojekyll</code>). 이 문서들도 순위표 주소 아래에 공개된다.</li>
+<li>순위표 봇은 <code>docs/leaderboard.json</code>과 <code>docs/submissions/</code>만 커밋한다 (<a href="../../runner/board_cli.ts">runner/board_cli.ts</a>).</li>
+</ul>
+<h2 id="주요-흐름도"><a class="anchor" href="#주요-흐름도">#</a>주요 흐름도</h2>
+<h3 id="면접-한-번"><a class="anchor" href="#면접-한-번">#</a>면접 한 번</h3>
+<pre class="mermaid">sequenceDiagram
+  actor U as 사용자
+  participant S as 스킬 SKILL.md
+  participant E as arena.mjs
+  participant C as core
+  participant L as 모델 백엔드
+  participant H as ARENA_HOME
+  U-&gt;&gt;S: /arena:apply 명세.md
+  S-&gt;&gt;E: config (언어 확인·저장)
+  S-&gt;&gt;E: start --lang --mode -- 명세.md
+  E-&gt;&gt;E: 64KB·최소 40자 확인, 체급 결정
+  E-&gt;&gt;H: state.json 저장, live.jsonl 비우기
+  E-&gt;&gt;C: 보안 검문소 + 서류전형
+  C-&gt;&gt;L: 분류기(의심·10% 표본), 면접관 채점
+  L--&gt;&gt;C: 판정 JSON
+  C--&gt;&gt;E: 인용 검증·다수결·점수
+  E-&gt;&gt;H: 결과 저장, live.jsonl 이벤트
+  E--&gt;&gt;S: JSON (stage, next, division)
+  S--&gt;&gt;U: 서류전형 장면
+  loop next 가 null 이 될 때까지
+    S--&gt;&gt;U: 대기실·면접실 장면
+    S-&gt;&gt;E: next 세션
+    E-&gt;&gt;E: 명세·프롬프트가 바뀌었으면 멈춤
+    E-&gt;&gt;C: 1차 / 2차 / 최종
+    C-&gt;&gt;L: 출제(Sonnet), 지원자(체급 모델), 채점(Haiku)
+    L--&gt;&gt;C: 응답·판정
+    C--&gt;&gt;E: 단계 결과
+    E--&gt;&gt;S: JSON
+    S--&gt;&gt;U: 단계 결과 장면
+  end
+  S--&gt;&gt;U: 합격 또는 불합격 통지서</pre>
+<h3 id="순위표-제출"><a class="anchor" href="#순위표-제출">#</a>순위표 제출</h3>
+<pre class="mermaid">sequenceDiagram
+  actor U as 사용자
+  participant S as 스킬 submit.md
+  participant E as arena.mjs
+  participant G as GitHub Issue
+  participant A as Actions board_cli.ts
+  participant P as main 의 docs/
+  U-&gt;&gt;S: /arena:apply submit
+  S-&gt;&gt;E: list (submittable 세션 찾기)
+  S-&gt;&gt;E: submit 세션
+  E-&gt;&gt;E: 봇과 같은 검사를 로컬에서 먼저
+  E--&gt;&gt;S: 제목, 본문 파일, newIssueUrl
+  S--&gt;&gt;U: 공개되는 내용 알리고 동의 받기
+  U-&gt;&gt;S: 동의
+  S-&gt;&gt;G: gh issue create (없으면 newIssueUrl 안내)
+  G-&gt;&gt;A: Issue 열림 또는 15분 주기
+  A-&gt;&gt;A: 본문 디코드, verifySubmission, 하루 한도·계정 나이
+  alt 통과
+    A-&gt;&gt;P: submissions/ 추가, leaderboard.json 다시 생성, main 에 커밋
+    A-&gt;&gt;G: 수락 답글·라벨, 닫기
+  else 실패
+    A-&gt;&gt;G: 거절 사유 답글·라벨, 닫기
+  end</pre>
+<h2 id="핵심-파일"><a class="anchor" href="#핵심-파일">#</a>핵심 파일</h2>
+<h3 id="core"><a class="anchor" href="#core">#</a>core/</h3>
+<table>
+<thead>
+<tr>
+<th>파일</th>
+<th>역할</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="../../core/interview.ts">interview.ts</a></td>
+<td>면접 흐름. 한 번에 끝까지(<code>interview</code>), 한 단계씩(<code>runChallenge</code>, <code>nextChallenge</code>)</td>
+</tr>
+<tr>
+<td><a href="../../core/stages.ts">stages.ts</a></td>
+<td>단계 구현: 검문소 분류기, 서류(흔들리는 항목 3표, 통과선 근처 재채점, &quot;없다&quot; 재확인), 1·2차 출제·실행·채점, 최종 공격 편성</td>
+</tr>
+<tr>
+<td><a href="../../core/gate.ts">gate.ts</a></td>
+<td>보안 검문소 L1(형식·크기)·L2(정규식 HARD/SOFT)</td>
+</tr>
+<tr>
+<td><a href="../../core/scoring.ts">scoring.ts</a></td>
+<td>통과선, 인용 검증, 다수결, 점수 계산. 점수는 모델이 아니라 여기서 낸다</td>
+</tr>
+<tr>
+<td><a href="../../core/detectors.ts">detectors.ts</a></td>
+<td>코드 탐지기: canary, 명세 겹침, 유출 정규식, 반복, 강요 표식, 출력 약속, 도구 로그</td>
+</tr>
+<tr>
+<td><a href="../../core/contracts.ts">contracts.ts</a></td>
+<td>명세에 실제로 적힌 출력 약속만 남긴다</td>
+</tr>
+<tr>
+<td><a href="../../core/doc_review.ts">doc_review.ts</a></td>
+<td>서류 체크리스트 파싱, 피드백-판정 연결, 재확인 반영</td>
+</tr>
+<tr>
+<td><a href="../../core/exam.ts">exam.ts</a></td>
+<td>분기 고정 출제, 명세 해시, 시드</td>
+</tr>
+<tr>
+<td><a href="../../core/attack_variants.ts">attack_variants.ts</a></td>
+<td>공격 문구를 틀과 빈칸 값으로 조립</td>
+</tr>
+<tr>
+<td><a href="../../core/division.ts">division.ts</a></td>
+<td>명세의 <code>model:</code>로 체급 결정</td>
+</tr>
+<tr>
+<td><a href="../../core/engine.ts">engine.ts</a></td>
+<td>API 백엔드, 모델 ID, 가격표</td>
+</tr>
+<tr>
+<td><a href="../../core/prompts.ts">prompts.ts</a></td>
+<td>프롬프트 읽기, nonce, 데이터 감싸기, 지원자 시스템 프롬프트</td>
+</tr>
+</tbody></table>
+<h3 id="runner"><a class="anchor" href="#runner">#</a>runner/</h3>
+<table>
+<thead>
+<tr>
+<th>파일</th>
+<th>역할</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="../../runner/arena.ts">arena.ts</a></td>
+<td>스킬이 부르는 CLI: <code>start</code>, <code>next</code>, <code>status</code>, <code>list</code>, <code>submit</code>, <code>config</code>, <code>version</code>. 번들 진입점</td>
+</tr>
+<tr>
+<td><a href="../../runner/cli_engine.ts">cli_engine.ts</a></td>
+<td><code>claude -p</code> 백엔드. 키가 있으면 API로 바꾼다 (<code>localLlm</code>)</td>
+</tr>
+<tr>
+<td><a href="../../runner/fs_exam_store.ts">fs_exam_store.ts</a></td>
+<td>출제분 파일 저장</td>
+</tr>
+<tr>
+<td><a href="../../runner/summary.ts">summary.ts</a></td>
+<td>단계 결과를 스킬이 읽을 요약으로</td>
+</tr>
+<tr>
+<td><a href="../../runner/board.ts">board.ts</a></td>
+<td>제출물 만들기·검증, 순위 계산, <code>promptsHash</code></td>
+</tr>
+<tr>
+<td><a href="../../runner/board_cli.ts">board_cli.ts</a></td>
+<td>Actions용 <code>sweep</code>, 한 건 <code>verify</code>, <code>rebuild</code></td>
+</tr>
+<tr>
+<td><a href="../../runner/bundle_assets.ts">bundle_assets.ts</a></td>
+<td><code>prompts/</code>·<code>schemas/</code>를 <code>core/assets.generated.ts</code>로</td>
+</tr>
+<tr>
+<td><a href="../../runner/run.ts">run.ts</a></td>
+<td>개발용 로컬 실행기 (한 번에 끝까지, <code>results/</code>에 저장)</td>
+</tr>
+<tr>
+<td><a href="../../runner/regress.ts">regress.ts</a></td>
+<td>회귀 샘플을 N회씩 돌려 기대 결과와 비교</td>
+</tr>
+<tr>
+<td><a href="../../runner/rejudge.ts">rejudge.ts</a></td>
+<td>저장된 응답은 두고 1·2차 채점만 다시 (면접관 편차 측정)</td>
+</tr>
+<tr>
+<td><a href="../../runner/compare_verdicts.ts">compare_verdicts.ts</a></td>
+<td>판정 비교 도구</td>
+</tr>
+<tr>
+<td><a href="../../runner/export_core.ts">export_core.ts</a></td>
+<td><code>core/</code>를 다른 저장소로 복사</td>
+</tr>
+</tbody></table>
+<h3 id="스킬패널"><a class="anchor" href="#스킬패널">#</a>스킬·패널</h3>
+<table>
+<thead>
+<tr>
+<th>파일</th>
+<th>역할</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="../../plugins/arena/skills/apply/SKILL.md">SKILL.md</a></td>
+<td>진행자 규칙: 후보 고르기, 언어·모드, 단계 진행, 오류 처리</td>
+</tr>
+<tr>
+<td><a href="../../plugins/arena/skills/apply/submit.md">submit.md</a></td>
+<td>제출 절차와 공개 동의, 배지</td>
+</tr>
+<tr>
+<td><a href="../../plugins/arena/skills/apply/scenes.md">scenes.md</a></td>
+<td>장면 레이아웃(로비·대기실·면접실·통지서)과 언어별 문구</td>
+</tr>
+<tr>
+<td><a href="../../plugins/arena-room/hooks/register.tsx">register.tsx</a></td>
+<td><code>live.jsonl</code>을 읽어 패널·상태줄·토스트를 그린다. <code>/arena-room</code> 명령</td>
+</tr>
+</tbody></table>
+<h2 id="빌드실행배포"><a class="anchor" href="#빌드실행배포">#</a>빌드·실행·배포</h2>
+<pre><code class="lang-bash">npm ci                 # postinstall 이 core/assets.generated.ts 를 만든다
+npm test               # pretest 로 번들을 먼저 빌드하고, 모델 호출 없이 core·runner 테스트
+npm run typecheck
+npm run build          # esbuild → plugins/arena/skills/apply/bin/arena.mjs
+node runner/run.ts tests/sample_candidates/good_claude_subagent.md --lang ko   # 실제 모델 호출
+node runner/regress.ts --runs 3                                                # 회귀 (비용 발생)
+node runner/board_cli.ts rebuild                                               # 순위 다시 만들기</code></pre>
+<ul>
+<li>개발에는 Node.js 24 이상(<code>.ts</code> 직접 실행). 설치한 스킬은 Node.js 20 이상.</li>
+<li>소스를 고치면 다시 빌드한 <code>arena.mjs</code>를 같은 커밋에 넣는다. 빠뜨리면 설치된 스킬이 예전 코드로 돈다.</li>
+<li><code>prompts/</code>나 <code>schemas/</code>를 고치면 프롬프트 해시가 바뀐다. 이전 결과도 계속 받으려면 이전 해시를 <a href="../../leaderboard/accepted_prompts.json">leaderboard/accepted_prompts.json</a>에 넣는다.</li>
+<li>배포: <code>main</code>에 합치면 끝이다. 마켓플레이스·skills.sh·Pages가 <code>main</code>을 읽는다. 버전은 <code>package.json</code>, <code>plugins/arena/.claude-plugin/plugin.json</code>, <code>runner/arena.ts</code>의 <code>ARENA_VERSION</code>에 있고, 태그는 <code>vX.Y.Z</code> (<a href="../../CONTRIBUTING.ko.md">CONTRIBUTING.ko.md</a>).</li>
+<li>브랜치: <code>feat/</code>·<code>fix/</code>·<code>docs/</code> 브랜치에서 PR로 <code>main</code>에 합친다. 통합 브랜치(develop)는 두지 않는다.</li>
+</ul>
+<h2 id="버전릴리스-현황"><a class="anchor" href="#버전릴리스-현황">#</a>버전·릴리스 현황</h2>
+<table>
+<thead>
+<tr>
+<th>태그</th>
+<th>커밋</th>
+<th>날짜</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>v0.1.0</code></td>
+<td><code>288cf3c</code></td>
+<td>2026-11-04</td>
+<td>첫 공개. 엔진, 스킬, 순위표, 대기실 패널, README·기여 안내</td>
+</tr>
+</tbody></table>
+<ul>
+<li>GitHub 릴리스 페이지는 만들지 않았다. 설치는 마켓플레이스와 skills.sh로 한다.</li>
+<li><code>v0.1.0</code> 뒤 <code>main</code>에 들어간 것: 문서 참조 정리(<code>367b980</code>), 첫 순위표 제출 #2(<code>2d6b910</code>, 봇), README 샘플 결과(<code>33c9b2e</code>), Issue 양식 6종과 저장소 규칙(<code>17573f1</code>).</li>
+<li>공개 저장소의 이력은 2026-11-04에 새로 시작했다. 그 전 개발 이력은 비공개 저장소에 있다 (<a href="결정기록.html#2026-11-04-공개-저장소는-정리한-새-이력으로-만든다">결정기록</a>).</li>
+</ul>
+<h2 id="앞으로-할-일"><a class="anchor" href="#앞으로-할-일">#</a>앞으로 할 일</h2>
+<ul>
+<li><input disabled="" type="checkbox"> 재검증(Verified) 등급: 비공개 공격 풀로 운영자 쪽에서 다시 면접. 비용 부담 방식부터 정한다 (체급별 상위권부터가 유력).</li>
+<li><input disabled="" type="checkbox"> GPT·Gemini 지원자 엔진 어댑터. 지금은 Claude로 돌리고 참고용 표시.</li>
+<li><input disabled="" type="checkbox"> 서류 점수 흔들림 더 줄이기. 통과선 근처 재채점 뒤에도 폭이 남는다.</li>
+<li><input disabled="" type="checkbox"> 협업자를 받게 되면 봇을 배포 키로 push하게 바꾸고 <code>main</code>에 &quot;PR 필수&quot; 규칙을 건다 (<a href="../../CONTRIBUTING.ko.md">CONTRIBUTING.ko.md</a>).</li>
+</ul>
+
+</main>
+<aside class="toc"><div class="label">이 문서</div><a class="d2" href="#폴더모듈-구조">폴더·모듈 구조</a><a class="d2" href="#주요-흐름도">주요 흐름도</a><a class="d3" href="#면접-한-번">면접 한 번</a><a class="d3" href="#순위표-제출">순위표 제출</a><a class="d2" href="#핵심-파일">핵심 파일</a><a class="d3" href="#core">core/</a><a class="d3" href="#runner">runner/</a><a class="d3" href="#스킬패널">스킬·패널</a><a class="d2" href="#빌드실행배포">빌드·실행·배포</a><a class="d2" href="#버전릴리스-현황">버전·릴리스 현황</a><a class="d2" href="#앞으로-할-일">앞으로 할 일</a></aside>
+</div>
+<script>
+(function(){var r=document.documentElement,k='docs-theme';try{var s=localStorage.getItem(k);if(s)r.dataset.theme=s}catch(e){}
+document.getElementById('theme').onclick=function(){var d=r.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');r.dataset.theme=d==='dark'?'light':'dark';try{localStorage.setItem(k,r.dataset.theme)}catch(e){}location.reload()};})();
+</script>
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs';
+const r=document.documentElement;const dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;
+mermaid.initialize({startOnLoad:true,theme:dark?'dark':'default',fontFamily:'Pretendard, sans-serif'});
+</script>
+</body>
+</html>
