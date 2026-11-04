@@ -14,6 +14,31 @@
   - 이 파일들은 손으로 고치지 않는다.
   - 합치기 전에 브랜치를 `main` 위로 rebase 한다.
 
+## 저장소 규칙
+
+- 쓰기 권한은 소유자에게만 있다. 다른 사람은 포크한 뒤 풀 리퀘스트로 기여한다.
+- `main` 규칙은 강제 push와 브랜치 삭제를 막는다. 소유자(관리자)만 예외다.
+- "풀 리퀘스트 필수" 규칙은 걸지 않는다.
+  - 순위표 봇이 Actions 토큰으로 `main`에 바로 커밋하는데, 개인 저장소에서는 Actions 봇을 예외로 넣을 수 없다.
+  - 협업자를 추가하게 되면 봇을 배포 키로 push 하게 바꾸고, 그 키를 예외로 둔 뒤 이 규칙을 건다.
+
+## Issue 유형
+
+빈 Issue는 막혀 있고, 아래 양식 중 하나를 고른다 (`.github/ISSUE_TEMPLATE/`).
+
+| 양식 | 제목 접두어 | 라벨 | 처리 |
+| --- | --- | --- | --- |
+| 🏆 순위표 제출 | `[arena-submission]` | 봇이 붙임 | 봇이 자동 검증 |
+| 🐛 버그 신고 | | `bug` | 사람 |
+| 💡 개선 요청 | | `enhancement` | 사람 |
+| 🗑️ 내 기록 내리기 | `[arena-removal]` | `arena-removal` | 사람 (제출자 본인인지 확인) |
+| 🚩 기록 신고 | `[arena-report]` | `arena-report` | 사람 |
+| ❓ 질문 | | `question` | 사람 |
+
+- 보안 취약점은 Issue 대신 Security 탭의 비공개 신고로 받는다.
+- 제출 양식에는 라벨을 붙이지 않는다. `arena-submission`·`arena-accepted`·`arena-rejected` 는 봇이 처리 상태를 나타내려고 붙이는 라벨이다.
+- 봇은 제목이 `[arena-submission]` 으로 시작하는 Issue만 본다. 양식의 제목 접두어를 바꾸면 `runner/board_cli.ts` 의 `TITLE_PREFIX` 와 워크플로 조건도 같이 바꾼다.
+
 ## 풀 리퀘스트를 열기 전에
 
 ```bash

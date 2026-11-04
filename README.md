@@ -137,8 +137,9 @@ Submitting publishes the full text of your spec so anyone can re-run it (the int
 
 ### Removal and reports
 
-- To take your entry down, open an issue starting with `[arena-removal]` and give the submission issue number. If you submitted it, it is removed from the board and from `docs/submissions/`.
-- To report an entry that looks forged, or a spec that contains someone else's private information, open an `[arena-report]` issue the same way.
+- To take your entry down, open a **Remove my entry** issue and give the submission issue number. If you submitted it, it is removed from the board and from `docs/submissions/`.
+- To report an entry that looks forged, or a spec that contains someone else's private information, open a **Report an entry** issue the same way.
+- Bugs, improvement ideas and questions each have their own issue form. Report a security vulnerability privately from the Security tab, not in an issue.
 - Removing a file does not remove it from git history. If a secret was published, rotate it first.
 
 ## Waiting-room pane (optional)
@@ -198,7 +199,9 @@ Branches, pull requests and releases are described in [CONTRIBUTING.md](CONTRIBU
 - `.github/workflows/leaderboard.yml` processes submissions when an issue opens and every 15 minutes.
   - GitHub pauses scheduled runs after 60 days without repository activity. Re-enable it from the Actions tab.
 - The board is served by GitHub Pages from `docs/` on `main`. Turn Pages on in the repository settings.
-- The bot commits straight to `main`. If you turn on branch protection, allow pushes from the Actions bot.
+- The bot commits straight to `main` with the Actions token.
+  - The `main` ruleset blocks force pushes and deletion only. A "require a pull request" rule would also block the bot, because a personal repository cannot list the Actions bot as an exception.
+  - Only the owner has write access, so everyone else contributes through a fork and a pull request.
 
 ## License
 

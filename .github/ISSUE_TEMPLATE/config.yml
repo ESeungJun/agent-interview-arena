@@ -1,0 +1,6 @@
+# 빈 Issue 는 막고, 아래 템플릿 중 하나를 고르게 한다.
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Security vulnerability / 보안 취약점
+    url: https://github.com/ESeungJun/agent-interview-arena/security/advisories/new
+    about: Report privately, not in a public issue. / 공개 Issue 대신 비공개로 신고해 주세요.

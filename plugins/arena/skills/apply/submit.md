@@ -25,7 +25,7 @@ If the spec contains anything private (internal URLs, names, keys), tell them to
 
 1. Check `gh auth status`.
 2. If `gh` is signed in, run `gh issue create -R <repo> --title "<title>" --body-file "<bodyFile>"` with the values from step 2.
-3. If `gh` is missing or signed out, give the user `newIssueUrl`, tell them to use `<title>` as the title, and paste the contents of `<bodyFile>` unchanged as the body.
+3. If `gh` is missing or signed out, give the user `newIssueUrl`. It opens the submission template: tell them to use `<title>` as the title and to replace the whole body with the contents of `<bodyFile>`, unchanged.
 
 Share the issue link. The bot replies on the issue within about 15 minutes: accepted (and the board updates) or rejected with reasons.
 
