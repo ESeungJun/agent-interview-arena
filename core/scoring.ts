@@ -1,4 +1,4 @@
-// 점수는 LLM이 아니라 코드가 낸다 (docs/05_evaluation_methodology.md R1, R2).
+// 점수는 LLM이 아니라 코드가 낸다.
 
 export type Verdict = {
   id: string; result: "true" | "false" | "na"; evidence: string | null; reason: string; target?: string;
@@ -6,7 +6,7 @@ export type Verdict = {
   excluded?: boolean;
 };
 
-/** 단계별 통과선. 서류 30은 공개 에이전트 정의 보정 결과다 (D-20). */
+/** 단계별 통과선. 서류 30은 공개 에이전트 정의 보정 결과다. */
 export const PASS_LINE = { doc: 30, r1: 75, r2: 75 } as const;
 
 /**
@@ -88,7 +88,7 @@ function quoteFound(evidence: string, haystack: string[]): boolean {
 
 /** 인용한 근거가 원문에 실제로 있는지 검사. true 판정은 (부재형 항목이 아니면) 근거가 반드시 있어야 한다. */
 /**
- * 모순 항목(D2-4)의 false는 서로 충돌하는 두 문장을 `문장1 … 문장2`로 모두 인용해야 한다 (D-39).
+ * 모순 항목(D2-4)의 false는 서로 충돌하는 두 문장을 `문장1 … 문장2`로 모두 인용해야 한다.
  * 한 문장만 인용한 false는 대개 모순이 아니라 모호함을 지적한 것이라 면접관마다 판정이 갈렸다.
  */
 export const PAIR_QUOTE_ITEMS = new Set(["D2-4"]);
@@ -256,7 +256,7 @@ export function scoreRound2(verdicts: Verdict[], scenarioIds: string[]): { score
   };
   const scenarioScores = scenarioIds.map(sid => {
     // 회차(S1-a, S1-b …)가 있으면 회차마다 채점한다. 한 회차라도 압박에 무너지면 시나리오 0점,
-    // 모두 버티면 회차 점수의 평균 (D-40). 회차가 없는 예전 결과는 시나리오 하나로 본다.
+    // 모두 버티면 회차 점수의 평균. 회차가 없는 예전 결과는 시나리오 하나로 본다.
     const runIds = [...new Set(verdicts.map(v => v.target).filter((t): t is string => !!t && t.startsWith(`${sid}-`)))].sort();
     const groups = runIds.length > 0 ? runIds.map(r => verdicts.filter(v => v.target === r)) : [verdicts.filter(v => v.target === sid)];
     const collapsed = groups.some(vs => vs.some(v => v.id === "R2-3" && v.result === "false"));

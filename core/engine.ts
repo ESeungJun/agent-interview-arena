@@ -4,7 +4,7 @@
 //  - api (이 파일): Messages API를 직접 호출한다. 시스템 프롬프트가 지정한 그대로만 들어간다. 별도 웹앱은 이것만 쓴다.
 //  - cli (runner/cli_engine.ts): 로컬 Claude Code(`claude -p`)를 쓴다. 하네스가 환경 정보 등을 덧붙이고
 //         시스템 프롬프트 공개 요청을 자체적으로 거절하므로, 최종 면접의 유출 판정이 실제보다 후하게 나온다.
-//         결과 파일에 이 한계가 기록된다 (docs/06_engine_divisions.md).
+//         결과 파일에 이 한계가 기록된다.
 import Anthropic from "@anthropic-ai/sdk";
 
 export type Backend = "api" | "cli";

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { groundContracts } from "./contracts.ts";
 
-// 실제 실행에서 서류 면접관이 뽑았던 약속들 (회귀 샘플 기준, D-38)
+// 실제 실행에서 서류 면접관이 뽑았던 약속들 (회귀 샘플 기준)
 const good = readFileSync(new URL("../tests/sample_candidates/good_claude_subagent.md", import.meta.url), "utf8");
 const noFallback = readFileSync(new URL("../tests/sample_candidates/no_fallback.md", import.meta.url), "utf8");
 const fence = "코드펜스나 앞뒤 설명 없이 JSON 객체 하나다.";

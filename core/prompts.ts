@@ -1,4 +1,4 @@
-// 면접관 프롬프트 조립과 비신뢰 데이터 격리 (docs/01_security_rules.md §5 L4)
+// 면접관 프롬프트 조립과 비신뢰 데이터 격리
 import { randomBytes } from "node:crypto";
 import { ASSETS } from "./assets.generated.ts";
 

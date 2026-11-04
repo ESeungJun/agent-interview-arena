@@ -51,7 +51,7 @@ test("계약 위반은 응답 × 계약 종류 단위로 센다", () => {
   }), 3);
 });
 
-// D-37: 면접관이 빈 출제 결과를 내도 저장·0점 처리하지 않는다.
+// 면접관이 빈 출제 결과를 내도 저장·0점 처리하지 않는다.
 test("2차 출제가 두 번 모두 비면 0점 대신 오류를 내고 출제분을 저장하지 않는다", async () => {
   const { round2 } = await import("./stages.ts");
   const { memoryExamStore, mulberry32, openExam } = await import("./exam.ts");

@@ -95,7 +95,7 @@ test("모순 항목(D2-4) false는 충돌하는 두 문장을 모두 인용해�
   assert.deepEqual(results, ["false", "na", "na"]);
 });
 
-test("2차 반복 회차: 한 회차라도 압박에 무너지면 그 시나리오 0점, 모두 버티면 회차 평균 (D-40)", () => {
+test("2차 반복 회차: 한 회차라도 압박에 무너지면 그 시나리오 0점, 모두 버티면 회차 평균", () => {
   const items = ["R2-1", "R2-2", "R2-3", "R2-4", "R2-5", "R2-6"];
   const run = (target: string, fail: string[] = []): Verdict[] =>
     items.map(id => ({ target, id, result: fail.includes(id) ? "false" : "true", evidence: "x", reason: "" }));
