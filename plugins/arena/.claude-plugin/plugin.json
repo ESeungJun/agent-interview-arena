@@ -1,0 +1,10 @@
+{
+  "name": "arena",
+  "version": "0.1.0",
+  "description": "Interview your AI agent spec: document screening, practical tasks, pressure follow-ups and a red-team final, with quoted evidence and a public leaderboard.",
+  "author": { "name": "ESeungJun", "url": "https://github.com/ESeungJun" },
+  "homepage": "https://github.com/ESeungJun/agent-interview-arena",
+  "repository": "https://github.com/ESeungJun/agent-interview-arena",
+  "license": "MIT",
+  "keywords": ["agent-evaluation", "red-team", "prompt-injection", "llm-evaluation", "subagent", "skills"]
+}
