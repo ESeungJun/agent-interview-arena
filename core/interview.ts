@@ -3,7 +3,7 @@
 //
 // 두 가지 방식으로 돌린다.
 //  - interview(): 한 번에 원하는 단계까지 (로컬 실행기·측정용)
-//  - runChallenge(): 한 단계씩 (서비스). 앞 단계를 통과해야 다음 단계에 도전할 수 있다 (D-28)
+//  - runChallenge(): 한 단계씩 (서비스). 앞 단계를 통과해야 다음 단계에 도전할 수 있다
 import type { Llm, ModelAlias } from "./engine.ts";
 import { mulberry32, openExam, type ExamStore } from "./exam.ts";
 import { documentLanguage, type Lang } from "./prompts.ts";

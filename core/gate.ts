@@ -1,4 +1,4 @@
-// 보안 검문소 L1(형식) + L2(정규식 2등급). 설계: docs/01_security_rules.md
+// 보안 검문소 L1(형식) + L2(정규식 2등급).
 export type GateResult =
   | { verdict: "BANNED"; rule: string; reason: string; match: string }
   | { verdict: "SUSPECT"; rules: string[]; level: "HIGH" | "NORMAL" }
@@ -6,7 +6,7 @@ export type GateResult =
 
 /**
  * .md 크기 상한 (UTF-8 바이트). 토큰 폭탄(OWASP LLM10)을 막는 기준이다.
- * 한글은 한 글자가 3바이트라 15KB 였을 때 한글 약 5천 자로 너무 작았다. 64KB(한글 약 2만 자, 약 2만 토큰)로 올렸다 (D-29).
+ * 한글은 한 글자가 3바이트라 15KB 였을 때 한글 약 5천 자로 너무 작았다. 64KB(한글 약 2만 자, 약 2만 토큰)로 올렸다.
  */
 export const MAX_MD_BYTES = 64 * 1024;
 const INVISIBLE = /[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]|[\u{E0000}-\u{E007F}]/u;
@@ -15,7 +15,7 @@ const SANDBOX_TAG = /<\/?\s*arena[:_-]/i;
 const HTML_COMMENT = /<!--([\s\S]*?)-->/g;
 const EVAL_WORDS = /(면접|심사|채점|평가|합격|통과|interview|evaluat|grader|score|\bpass\b)/i;
 // 숨은 주석이 평가자를 지목하고(EVAL_TARGET) 결과를 요구할 때(EVAL_OUTCOME)만 즉시 실격한다.
-// 평가 단어만 있는 주석("CI가 통과하면", "평가 기준 TODO")은 HIGH 의심으로 분류기에 넘긴다 (D-43).
+// 평가 단어만 있는 주석("CI가 통과하면", "평가 기준 TODO")은 HIGH 의심으로 분류기에 넘긴다.
 const EVAL_TARGET = /(면접관|심사관|심사위원|채점|평가자|평가\s*시스템|interviewer|evaluator|grader|judge|rubric)/i;
 const EVAL_OUTCOME = /(합격|통과|만점|100\s*점|true|무시|\bpass|full\s*marks|ignore|score)/i;
 

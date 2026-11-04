@@ -20,7 +20,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
     process.exit(2);
   }
   // 면접관 프롬프트는 생성 파일(assets.generated.ts)에 담겨 함께 복사된다. prompts/ 가 없으면
-  // 프롬프트가 빠진 core가 나가므로 막고, 생성 파일이 낡았으면 다시 만든 뒤 복사한다 (D-34).
+  // 프롬프트가 빠진 core가 나가므로 막고, 생성 파일이 낡았으면 다시 만든 뒤 복사한다.
   if (!hasPrompts()) {
     console.error("prompts/ 가 없습니다. 저장소를 다시 받은 뒤 실행하세요.");
     process.exit(1);

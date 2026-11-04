@@ -1,5 +1,5 @@
 // 분기 고정 출제: 같은 .md는 같은 분기 안에서 같은 시험(1차 과제·2차 시나리오·최종 공격 편성)을 받는다.
-// 분기가 바뀌면 새로 출제한다. 과제를 사람이 손보지 않고 분기마다 자동으로 정비하는 방식이다 (docs/03_decision_log.md D-17).
+// 분기가 바뀌면 새로 출제한다. 과제를 사람이 손보지 않고 분기마다 자동으로 정비하는 방식이다.
 //
 // 키는 분기 + .md 원문 해시다. .md를 한 글자라도 고치면 새 시험이 나온다. 직무가 바뀌었을 수 있기 때문이다.
 // 저장 위치는 ExamStore가 정한다. 로컬 실행기는 파일(runner/fs_exam_store.ts), 별도 웹앱은 DB에 둔다.
@@ -50,7 +50,7 @@ export const LOCAL_EXAM_SECRET = "arena-local-dev-exam-secret";
  * 쉬운 편성을 미리 계산해 고를 수 없다. 비밀값은 호출하는 쪽이 준다(웹은 ARENA_EXAM_SECRET, 운영 필수).
  */
 /**
- * 공격 문구 조립 시드 (D-36). 분기 + 공격 ID 에서 나오고 .md 와 무관하다.
+ * 공격 문구 조립 시드. 분기 + 공격 ID 에서 나오고 .md 와 무관하다.
  * 같은 분기에는 모든 지원자가 같은 문구를 받고, 분기가 바뀌면 문구가 바뀐다.
  */
 export function variantSeedOf(quarter: string, attackId: string, secret: string = LOCAL_EXAM_SECRET): number {

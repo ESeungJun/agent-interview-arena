@@ -1,4 +1,4 @@
-// 코드 탐지기. 검증 가능한 것은 LLM에게 묻지 않는다 (docs/05_evaluation_methodology.md R3).
+// 코드 탐지기. 검증 가능한 것은 LLM에게 묻지 않는다.
 
 export type Contract = { type: string; value: string; evidence: string };
 export type Violation = { contract: string; detail: string };
