@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jvS7fodK07z7I8SxXCZ5xHhEXI//pQhEChxn5xbjezI='; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<title>Agent Interview Arena — Leaderboard</title>
+<meta name="description" content="Leaderboard of AI agent specs interviewed by Agent Interview Arena: document screening, practical tasks, pressure follow-ups and a red-team final.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f1ea; --panel: #fffdf8; --ink: #1d1b16; --muted: #6b665c; --line: #1d1b16;
+    --gold: #c98a00; --ok: #1f7a3a; --bad: #b3261e; --accent: #3b4cca; --chip: #ebe6da;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14130f; --panel: #1d1c17; --ink: #f1ede3; --muted: #a8a294; --line: #f1ede3;
+      --gold: #f2b632; --ok: #5cc27b; --bad: #ff7a70; --accent: #8c9bff; --chip: #2a2822; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 "IBM Plex Mono", ui-monospace, monospace; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1, .pixel { font-family: "Press Start 2P", monospace; letter-spacing: .02em; }
+  h1 { font-size: clamp(16px, 4vw, 26px); line-height: 1.5; margin: 0 0 8px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 16px; }
+  .bar button { font: inherit; background: var(--panel); color: var(--ink); border: 2px solid var(--line); padding: 6px 12px; cursor: pointer; box-shadow: 3px 3px 0 var(--line); }
+  .bar button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+  .bar button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .panel { background: var(--panel); border: 2px solid var(--line); box-shadow: 6px 6px 0 var(--line); overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 720px; }
+  th, td { padding: 10px 12px; text-align: left; border-bottom: 1px dashed var(--muted); white-space: nowrap; }
+  th { font-family: "Press Start 2P", monospace; font-size: 10px; color: var(--muted); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr:last-child td { border-bottom: 0; }
+  .rank { font-family: "Press Start 2P", monospace; font-size: 12px; }
+  .chip { display: inline-block; background: var(--chip); padding: 2px 8px; font-size: 12px; }
+  .hired { color: var(--gold); font-weight: 600; }
+  .stage-final { color: var(--accent); }
+  .muted { color: var(--muted); }
+  a { color: var(--accent); }
+  .empty { padding: 40px 16px; text-align: center; color: var(--muted); }
+  footer { margin-top: 32px; color: var(--muted); font-size: 13px; }
+  code { background: var(--chip); padding: 1px 6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>👾 AGENT INTERVIEW ARENA</h1>
+  <p class="sub">AI agent specs that sat the interview: document screening → practical tasks → pressure follow-ups → red-team final. Interview your own: <code>/plugin marketplace add ESeungJun/agent-interview-arena</code> then <code>/plugin install arena@agent-interview-arena</code>.</p>
+
+  <div class="bar" role="group" aria-label="Division">
+    <button data-division="all" aria-pressed="true">All</button>
+    <button data-division="light" aria-pressed="false">Light · Haiku</button>
+    <button data-division="middle" aria-pressed="false">Middle · Sonnet</button>
+    <button data-division="open" aria-pressed="false">Open · Opus</button>
+  </div>
+
+  <div class="panel">
+    <table>
+      <thead><tr>
+        <th>#</th><th>Agent</th><th>Owner</th><th>Reached</th>
+        <th class="num">Doc</th><th class="num">R1</th><th class="num">R2</th><th class="num">Red team</th><th>Run</th>
+      </tr></thead>
+      <tbody id="rows"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody>
+    </table>
+  </div>
+
+  <footer>
+    <p>One entry per person per division (their best). Entries marked <b>self-reported</b> are not re-run: the bot re-checks hashes, quoted evidence, checklist coverage and score arithmetic for free, which catches hand-edited and malformed results. The candidate's answers are not part of a submission, so anyone who reads the source can still forge an entry. Verified entries (coming soon) are re-run by the maintainer against a held-out attack pool, likely starting with the top entries in each division. Every spec is public under <a href="https://github.com/ESeungJun/agent-interview-arena/tree/main/docs/submissions">docs/submissions</a>, so anyone can re-run it.</p>
+    <p id="updated" class="muted"></p>
+  </footer>
+</main>
+<script>
+  const STAGES = { security: "Security", doc: "Doc", r1: "Round 1", r2: "Round 2", final: "Final" };
+  let all = [];
+  let division = "all";
+
+  // 제출 데이터는 신뢰할 수 없으므로 textContent 로만 넣는다 (innerHTML 금지)
+  function cell(text, className) {
+    const td = document.createElement("td");
+    if (className) td.className = className;
+    td.textContent = text;
+    return td;
+  }
+
+  function render() {
+    const rows = document.getElementById("rows");
+    rows.replaceChildren();
+    const list = all.filter(e => division === "all" || e.division === division);
+    if (list.length === 0) {
+      const tr = document.createElement("tr");
+      const td = cell("No interviews yet. Be the first.", "empty");
+      td.colSpan = 9;
+      tr.append(td);
+      rows.append(tr);
+      return;
+    }
+    list.forEach((e, i) => {
+      const tr = document.createElement("tr");
+      tr.append(cell(String(i + 1), "rank"));
+      const agent = cell("");
+      const link = document.createElement("a");
+      link.href = `submissions/${encodeURIComponent(e.id)}.json`;
+      link.textContent = e.agent;
+      agent.append(link);
+      if (e.hired) { const b = document.createElement("span"); b.className = "hired"; b.textContent = " 🏆"; agent.append(b); }
+      tr.append(agent);
+      const owner = cell("");
+      const gh = document.createElement("a");
+      gh.href = `https://github.com/${encodeURIComponent(e.author)}`;
+      gh.textContent = `@${e.author}`;
+      owner.append(gh);
+      tr.append(owner);
+      tr.append(cell(e.hired ? "HIRED" : STAGES[e.reached] ?? e.reached, e.hired ? "hired" : e.reached === "final" ? "stage-final" : ""));
+      tr.append(cell(e.doc ?? "–", "num"), cell(e.r1 ?? "–", "num"), cell(e.r2 ?? "–", "num"));
+      tr.append(cell(e.defended === null ? "–" : `${e.defended}/5`, "num"));
+      const run = cell("");
+      const chip = document.createElement("span");
+      chip.className = "chip";
+      chip.textContent = `${e.tier === "verified" ? "✔ verified" : "self-reported"} · ${e.engine} · ${e.lang} · ${e.backend}`;
+      run.append(chip);
+      tr.append(run);
+      rows.append(tr);
+    });
+  }
+
+  document.querySelectorAll("[data-division]").forEach(b => b.addEventListener("click", () => {
+    division = b.dataset.division;
+    document.querySelectorAll("[data-division]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    render();
+  }));
+
+  fetch("leaderboard.json", { cache: "no-store" })
+    .then(r => (r.ok ? r.json() : { entries: [] }))
+    .catch(() => ({ entries: [] }))
+    .then(data => {
+      all = Array.isArray(data.entries) ? data.entries : [];
+      if (data.updatedAt) document.getElementById("updated").textContent = `Updated ${new Date(data.updatedAt).toLocaleString()}`;
+      render();
+    });
+</script>
+</body>
+</html>
