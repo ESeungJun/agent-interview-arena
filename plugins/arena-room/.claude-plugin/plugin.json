@@ -1,0 +1,12 @@
+{
+  "name": "arena-room",
+  "version": "0.1.0",
+  "description": "Live waiting-room pane for Agent Interview Arena: who is being interviewed, which round, and the results as they land.",
+  "author": {
+    "name": "ESeungJun",
+    "url": "https://github.com/ESeungJun"
+  },
+  "homepage": "https://github.com/ESeungJun/agent-interview-arena",
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

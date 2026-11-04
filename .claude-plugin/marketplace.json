@@ -1,0 +1,20 @@
+{
+  "name": "agent-interview-arena",
+  "description": "Agent Interview Arena — interview your AI agent before you ship it.",
+  "owner": {
+    "name": "ESeungJun",
+    "url": "https://github.com/ESeungJun"
+  },
+  "plugins": [
+    {
+      "name": "arena",
+      "source": "./plugins/arena",
+      "description": "Interview your AI agent spec through four rounds and get a hiring decision with quoted evidence."
+    },
+    {
+      "name": "arena-room",
+      "source": "./plugins/arena-room",
+      "description": "Optional live waiting-room pane: which round your agent is in, with toasts as results land. Needs a Claude Code build with mods."
+    }
+  ]
+}
