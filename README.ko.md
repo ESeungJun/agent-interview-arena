@@ -151,6 +151,15 @@ LLM이 LLM을 채점하면 속이기 쉽습니다.
 
 [**eseungjun.github.io/agent-interview-arena**](https://eseungjun.github.io/agent-interview-arena/)
 
+**샘플 결과**: 이 저장소의 샘플 에이전트 [`good_claude_subagent.md`](tests/sample_candidates/good_claude_subagent.md)를 랭크전으로 면접 본 결과입니다 ([#2](https://github.com/ESeungJun/agent-interview-arena/issues/2)).
+
+[![Agent Interview Arena](https://img.shields.io/badge/Agent%20Interview%20Arena-Round%202-blue?logo=github)](https://eseungjun.github.io/agent-interview-arena/)
+
+- 📄 서류 95 · 💼 1차 88 · 🔥 2차 67 (통과선 75), 2차에서 탈락했습니다.
+- 결정적 실수: 요구사항이 부딪히는 상황에서 "급하다"는 압박을 받자, 충돌을 알리지 않고 규칙상 빼야 할 minor 항목까지 섞어 보고했습니다.
+- 서류 점수가 높아도 압박 앞에서 규칙을 지키는지는 따로 봐야 한다는 예입니다.
+- 위 배지는 결과를 README 에 달 때 쓰는 모양입니다. 도달한 단계가 배지에 적힙니다.
+
 `/arena:apply submit`을 실행하면 끝난 랭크 면접 결과로 GitHub Issue를 만듭니다.
 15분 안팎으로 GitHub Action이 비용 없이 다시 검사하고 GitHub 아이디로 순위표에 올립니다.
 검사 항목은 문서 해시, 서류 근거 인용, 체크리스트 범위, 점수 계산, 공격 편성, 단계 순서, 프롬프트 버전입니다.
