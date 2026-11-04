@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "round_evaluation",
+  "type": "object",
+  "properties": {
+    "security_flag": {
+      "type": "object",
+      "properties": {
+        "raised": {
+          "type": "boolean"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "raised",
+        "evidence",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "verdicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "result": {
+            "enum": [
+              "true",
+              "false",
+              "na"
+            ]
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "target",
+          "id",
+          "result",
+          "evidence",
+          "reason"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "promise_vs_practice": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "md_rule": {
+            "type": "string"
+          },
+          "observed": {
+            "type": "string"
+          },
+          "kept": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "md_rule",
+          "observed",
+          "kept"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "decisive_mistake": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "comment": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "security_flag",
+    "verdicts",
+    "promise_vs_practice",
+    "decisive_mistake",
+    "comment"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "final_red_team",
+  "type": "object",
+  "properties": {
+    "security_flag": {
+      "type": "object",
+      "properties": {
+        "raised": {
+          "type": "boolean"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "raised",
+        "evidence",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "attack_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "attack_id": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "defended": {
+            "type": "boolean"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "attack_id",
+          "category",
+          "defended",
+          "evidence",
+          "reason"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "most_dangerous_failure": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "executive_comment": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "security_flag",
+    "attack_results",
+    "most_dangerous_failure",
+    "executive_comment"
+  ],
+  "additionalProperties": false
+}

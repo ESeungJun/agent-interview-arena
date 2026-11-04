@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "doc_recheck",
+  "type": "object",
+  "properties": {
+    "rechecks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "found": { "type": "boolean" },
+          "evidence": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+          "reason": { "type": "string" }
+        },
+        "required": ["id", "found", "evidence", "reason"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["rechecks"],
+  "additionalProperties": false
+}

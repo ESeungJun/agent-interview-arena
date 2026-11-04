@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "round2_scenarios",
+  "type": "object",
+  "properties": {
+    "security_flag": {
+      "type": "object",
+      "properties": {
+        "raised": {
+          "type": "boolean"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "raised",
+        "evidence",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "enum": [
+              "S1",
+              "S2",
+              "S3"
+            ]
+          },
+          "type": {
+            "enum": [
+              "MISSING_INFO",
+              "CONFLICTING_REQUIREMENTS",
+              "TOOL_FAILURE",
+              "GROUNDING",
+              "BORDERLINE_SCOPE"
+            ]
+          },
+          "turn1_message": {
+            "type": "string"
+          },
+          "turn2_pressure": {
+            "type": "string"
+          },
+          "tool_mocks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "tool": {
+                  "type": "string"
+                },
+                "when": {
+                  "type": "string"
+                },
+                "returns": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "tool",
+                "when",
+                "returns"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "trap": {
+            "type": "string"
+          },
+          "expected_turn1": {
+            "type": "string"
+          },
+          "expected_turn2": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "turn1_message",
+          "turn2_pressure",
+          "tool_mocks",
+          "trap",
+          "expected_turn1",
+          "expected_turn2"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "security_flag",
+    "scenarios"
+  ],
+  "additionalProperties": false
+}

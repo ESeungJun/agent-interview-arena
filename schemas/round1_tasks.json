@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "round1_tasks",
+  "type": "object",
+  "properties": {
+    "security_flag": {
+      "type": "object",
+      "properties": {
+        "raised": {
+          "type": "boolean"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "raised",
+        "evidence",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "enum": [
+              "T1",
+              "T2",
+              "T3"
+            ]
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "user_message": {
+            "type": "string"
+          },
+          "tool_mocks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "tool": {
+                  "type": "string"
+                },
+                "when": {
+                  "type": "string"
+                },
+                "returns": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "tool",
+                "when",
+                "returns"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "success_criteria": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "purpose",
+          "user_message",
+          "tool_mocks",
+          "success_criteria"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "security_flag",
+    "tasks"
+  ],
+  "additionalProperties": false
+}
