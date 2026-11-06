@@ -14,6 +14,8 @@
 
 [English](README.md) · 한국어
 
+📝 만든 이야기: [velog](https://velog.io/@haul/agent-interview-arena-20-agents-0-hired)
+
 </div>
 
 ```text

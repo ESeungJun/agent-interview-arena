@@ -12,6 +12,8 @@ A Claude Code skill that puts any agent spec through a job interview: a security
 
 English · [한국어](README.ko.md)
 
+📝 Story behind it: [velog (Korean)](https://velog.io/@haul/agent-interview-arena-20-agents-0-hired)
+
 </div>
 
 ```text
