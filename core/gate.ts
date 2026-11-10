@@ -19,15 +19,19 @@ const INVISIBLE = /[\u00AD\u034F\u115F\u1160\u180E\u200B-\u200F\u202A-\u202E\u20
 const VARIATION_SELECTORS = /[\uFE00-\uFE0F]|[\u{E0100}-\u{E01EF}]/gu;
 const FLOOD = /(.{5,50}?)\1{20,}/; // 반복 단위 길이를 묶어 역추적이 입력 길이에 따라 폭증하지 않게 한다
 const SANDBOX_TAG = /<\/?\s*arena[:_-]/i;
-const HTML_COMMENT = /<!--([\s\S]*?)-->/g;
+// `--!>` 도 닫는 표기다. 닫히지 않은 주석은 파일 끝까지 주석으로 본다 (렌더러가 그렇게 숨긴다).
+// 다만 닫히지 않은 것은 명세가 주석 문법을 설명하다 생기는 일이 흔해(실제 명세에서 오탐 확인) 실격하지 않고 의심으로만 넘긴다: 두 번째 묶음이 닫는 표기다
+const HTML_COMMENT = /<!--([\s\S]*?)(--!?>|$)/g;
+// 마크다운의 주석 관용구: [//]: # (내용)
+const MD_COMMENT = /^[ \t]{0,3}\[\/\/\]:[ \t]*#[ \t]*[("']([^\n]{0,2000})[)"'][ \t]*$/gm;
 /**
  * 렌더링하면 접히거나 보이지 않는 HTML 블록: <details>, hidden 속성, display:none · visibility:hidden.
  * 주석과 달리 예시·부록을 접어 두는 정상 용도가 흔하므로 바로 실격하지 않고 HIGH 의심으로 분류 모델에 넘긴다.
  * 수량자를 묶어(속성 300자) 입력 길이에 따라 역추적이 폭증하지 않게 한다.
  */
 const FOLDED_BLOCKS: RegExp[] = [
-  /<details\b[^>]{0,300}>([\s\S]*?)(?:<\/details\s*>|$)/gi,
-  /<([a-z][a-z0-9]*)\b[^>]{0,300}?\s(?:hidden\b|style\s*=\s*["'][^"'>]{0,200}(?:display\s*:\s*none|visibility\s*:\s*hidden))[^>]{0,300}>([\s\S]*?)(?:<\/\1\s*>|$)/gi,
+  /<(details|template)\b[^>]{0,300}>([\s\S]*?)(?:<\/\1\s*>|$)/gi,
+  /<([a-z][a-z0-9]*)\b[^>]{0,300}?\s(?:hidden\b|style\s*=\s*["']?[^>]{0,200}?(?:display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0|opacity\s*:\s*0))[^>]{0,300}>([\s\S]*?)(?:<\/\1\s*>|$)/gi,
 ];
 const EVAL_WORDS = /(면접|심사|채점|평가|합격|통과|만점|최고\s*점|충족|interview|evaluat|grader|grading|score|satisf|full\s*marks|\bpass\b)/i;
 // 숨은 주석이 평가자를 지목하고(EVAL_TARGET) 결과를 요구할 때(EVAL_OUTCOME)만 즉시 실격한다.
@@ -60,18 +64,45 @@ const SOFT_RULES: { name: string; level: "HIGH" | "NORMAL"; regex: RegExp }[] = 
   { name: "ROLE_RESET", level: "NORMAL", regex: /(you are now|new role|너의 새로운 역할|지금부터 너는)/i },
 ];
 
+// 라틴 글자와 똑같이 보이는 키릴·그리스 글자. 규칙 대조용 사본에서만 라틴으로 접는다
+const CONFUSABLES: Record<string, string> = {
+  а: "a", е: "e", о: "o", р: "p", с: "c", х: "x", у: "y", і: "i", ј: "j", ѕ: "s", һ: "h", ԁ: "d", ɡ: "g", ѵ: "v", ԝ: "w",
+  А: "A", В: "B", Е: "E", К: "K", М: "M", Н: "H", О: "O", Р: "P", С: "C", Т: "T", Х: "X",
+  α: "a", ο: "o", ε: "e", ρ: "p", ν: "v", ι: "i", κ: "k", τ: "t",
+};
+const CONFUSABLE = new RegExp(`[${Object.keys(CONFUSABLES).join("")}]`, "g");
+
 /**
  * 규칙 대조용 정규화. 원문은 그대로 두고(해시·인용 대조는 원문 기준) 대조할 사본만 만든다.
+ * 단어를 끊거나 다른 글자로 바꿔 정규식을 피하는 표기를 걷어 낸다:
  *  - NFKC: 전각 문자·합자 등 호환 문자를 보통 글자로 (ｇｒａｄｅｒ → grader)
- *  - 이형 선택자 제거: 글자 사이에 끼워 단어를 끊는 표기
- *  - 내용 없는 인라인 태그 제거: 면<b></b>접관
+ *  - 숫자 문자 참조(&#47732; &#xBA74;)를 글자로
+ *  - 이형 선택자, 남은 형식 문자(Cf)·결합 문자(M), 점자 빈칸 제거
+ *  - 빈 주석·<wbr>·자기 닫는 태그·내용 없는 태그 제거 (겹친 것은 더 안 바뀔 때까지, 최대 5번)
+ *  - 강조 기호(* _ ~ `) 제거: **면**접관
+ *  - 라틴과 똑같이 보이는 키릴·그리스 글자를 라틴으로
  * 은닉 문자(INVISIBLE)는 정규화 전에 실격으로 걸러지므로 여기 오지 않는다.
+ * 완전한 방어가 아니다: 여기 없는 표기로 끊은 문장은 분류 모델과 면접관이 본다.
  */
 export function normalizeForGate(md: string): string {
-  return md
+  const codePoint = (n: number) => (n > 0 && n <= 0x10ffff && !(n >= 0xd800 && n <= 0xdfff) ? String.fromCodePoint(n) : "");
+  let text = md
+    .replace(/&#(\d{1,7});/g, (_, d: string) => codePoint(Number(d)))
+    .replace(/&#x([0-9a-f]{1,6});/gi, (_, h: string) => codePoint(parseInt(h, 16)))
+    // 분해한 뒤 결합 문자를 지우고 다시 합친다 (á → a). 한글 자모는 결합 문자가 아니라 그대로 다시 합쳐진다
+    .normalize("NFKD")
+    .replace(/[\p{Cf}\p{M}\u2800]/gu, "")
     .normalize("NFKC")
     .replace(VARIATION_SELECTORS, "")
-    .replace(/<([a-z][a-z0-9]*)\b[^>]{0,100}>\s*<\/\1\s*>/gi, "");
+    .replace(/<!--\s*-->/g, "")
+    .replace(/<wbr\s*\/?>/gi, "")
+    .replace(/<[a-z][a-z0-9]*\b[^<>]{0,100}\/>/gi, "");
+  for (let i = 0; i < 5; i++) {
+    const next = text.replace(/<([a-z][a-z0-9]*)\b[^<>]{0,100}>\s*<\/\1\s*>/gi, "");
+    if (next === text) break;
+    text = next;
+  }
+  return text.replace(/[*_~`]+/g, "").replace(CONFUSABLE, c => CONFUSABLES[c]);
 }
 
 export function runSecurityGate(md: string): GateResult {
@@ -87,15 +118,20 @@ export function runSecurityGate(md: string): GateResult {
 
   // L2. HARD — 여기부터는 정규화한 사본으로 본다 (원문도 함께 봐서 정규화가 지운 모양을 놓치지 않는다)
   const text = normalizeForGate(md);
-  const views = text === md ? [md] : [md, text];
+  // 규칙의 `.` 은 줄바꿈을 넘지 않는다. 줄바꿈(과 U+2028·2029)으로 문장을 끊은 표기를 보려고 한 줄로 이은 사본도 본다
+  const joined = text.replace(/[\r\n\u2028\u2029]+/g, " ");
+  const views = [...new Set([md, text])];
   const tag = views.map(v => v.match(SANDBOX_TAG)).find(Boolean);
   if (tag) return ban("SANDBOX_TAG", "면접장 격리 태그를 모방한 탈출 시도가 감지되었습니다.", tag[0]);
 
   const softHits = new Set<string>();
   const directive = (body: string) => EVAL_WORDS.test(body) || SOFT_RULES.some(r => r.regex.test(body));
   for (const v of views) {
-    for (const [, body] of v.matchAll(HTML_COMMENT)) {
-      if (EVAL_TARGET.test(body) && EVAL_OUTCOME.test(body))
+    const comments = [...[...v.matchAll(HTML_COMMENT)].map(m => ({ body: m[1], closed: m[2] !== "" })), ...[...v.matchAll(MD_COMMENT)].map(m => ({ body: m[1], closed: true }))];
+    for (const { body, closed } of comments) {
+      // 실격은 원문에서 닫힌 주석이 평가자와 결과를 함께 말할 때만이다. 정규화한 사본에서만 맞는 것은 의심으로 넘긴다
+      // (사본은 기호를 지워 낱말이 달라질 수 있어, 그것만으로 실격하면 정상 명세가 걸린다: 실제 명세에서 확인)
+      if (closed && v === md && EVAL_TARGET.test(body) && EVAL_OUTCOME.test(body))
         return ban("HIDDEN_EVAL_DIRECTIVE", "숨겨진 주석 안에서 평가 관련 지시가 감지되었습니다.", body.trim().slice(0, 80));
       if (directive(body)) softHits.add("HIDDEN_DIRECTIVE");
     }
@@ -105,6 +141,9 @@ export function runSecurityGate(md: string): GateResult {
     // L2. SOFT
     for (const r of SOFT_RULES) if (r.regex.test(v)) softHits.add(r.name);
   }
+  // 줄바꿈으로 끊은 문장: 평가를 겨냥한 규칙(HIGH)만 한 줄로 이은 사본에서 한 번 더 본다.
+  // 일반 규칙까지 이어 보면 줄이 다른 무관한 낱말끼리 맞아 오탐이 는다 (실제 명세 359개로 확인)
+  if (joined !== text) for (const r of SOFT_RULES) if (r.level === "HIGH" && r.regex.test(joined)) softHits.add(r.name);
   if (softHits.size === 0) return { verdict: "CLEAN" };
 
   const high = [...softHits].some(n => n === "HIDDEN_DIRECTIVE" || n === "FOLDED_DIRECTIVE" || SOFT_RULES.find(r => r.name === n)?.level === "HIGH");

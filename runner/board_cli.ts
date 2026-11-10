@@ -5,7 +5,8 @@
 //   node runner/board_cli.ts rebuild                     docs/leaderboard.json 다시 만들기
 // Issue 제목·본문·작성자는 신뢰할 수 없는 입력이다. gh·git 은 셸 없이 인자 배열로만 부른다.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -34,7 +35,8 @@ export function processSubmission(body: string, author: string, issue: number, i
   if (!sub) return { ok: false, problems: ["Could not read the submission data. Post the body exactly as `arena submit` generated it."] };
   let problems: string[];
   try {
-    problems = verifySubmission(sub, hashes);
+    // 분기 검사는 제출자가 적은 시각이 아니라 Issue 생성 시각으로 한다
+    problems = verifySubmission(sub, hashes, new Date(issueCreatedAt));
   } catch {
     // 검증 코드가 예상 못 한 모양에 터지면 일시 오류가 아니라 받을 수 없는 제출이다 (열어 두면 매 주기 다시 돈다)
     return { ok: false, problems: ["The submission data has an unexpected shape."] };
@@ -154,6 +156,33 @@ export function countEarlier(labeled: Map<number, number>, issue: number, issueC
 
 const run = (cmd: string, args: string[]): string => execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
 
+/** 제출 한 건을 검증하는 데 주는 시간. 정상 제출은 수십 ms 다. 넘으면 일시 오류가 아니라 거절이다 */
+export const VERIFY_TIMEOUT_MS = 20_000;
+
+/**
+ * 제출 한 건을 별도 프로세스에서 시간 제한을 두고 검증한다. 본문은 신뢰할 수 없는 입력이고 검증 시간이 그 크기에 달려 있어,
+ * 한 건이 실행 전체(15분 제한)를 붙잡아 다른 제출까지 저장되지 못하게 하는 일을 막는다.
+ * 본문은 파일로 넘긴다 (명령줄 인자에 넣지 않는다).
+ */
+export function processSubmissionGuarded(
+  body: string, author: string, issue: number, issueCreatedAt: string, timeoutMs = VERIFY_TIMEOUT_MS,
+): ReturnType<typeof processSubmission> {
+  const dir = mkdtempSync(join(tmpdir(), "arena-verify-"));
+  const file = join(dir, "body.txt");
+  try {
+    writeFileSync(file, body);
+    const out = execFileSync(process.execPath, [fileURLToPath(import.meta.url), "check", file, "--author", author, "--issue", String(issue), "--created-at", issueCreatedAt], {
+      encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024,
+    });
+    return JSON.parse(out) as ReturnType<typeof processSubmission>;
+  } catch (e) {
+    const timedOut = (e as { code?: string; signal?: string }).code === "ETIMEDOUT" || (e as { signal?: string }).signal === "SIGTERM";
+    return { ok: false, problems: [timedOut ? "The submission took too long to verify." : "The submission could not be verified."] };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 /** gh api 한 쪽을 받아, 한 줄에 하나씩 나오는 JSON 을 모은다 (검색 인덱스가 아닌 목록 API) */
 function ghPage<T>(path: string, jq: string): T[] {
   return run("gh", ["api", path, "--jq", jq]).split("\n").filter(Boolean).map(l => JSON.parse(l) as T);
@@ -162,7 +191,7 @@ function ghPage<T>(path: string, jq: string): T[] {
 /** 접수 답글. 등급을 모르면(지난 실행이 접수한 건의 답글만 마저 달 때) 등급 없이 답한다 */
 export function acceptedText(tier?: BoardEntry["tier"]): string {
   const board = `The leaderboard updates in a minute: ${BOARD_URL}`;
-  if (tier === "self-reported") return `✅ Accepted as **self-reported**: the transcripts were re-checked in code (quoted evidence, output contracts, this quarter's attack line-up and the leak detectors). The interview itself was not re-run. ${board}`;
+  if (tier === "self-reported") return `✅ Accepted as **self-reported**: the transcripts were re-checked in code (quoted evidence, output contracts, this quarter's attack line-up and the leak detectors). The interview itself was not re-run and no model re-graded it. ${board}`;
   if (tier === "unverified") return `✅ Accepted as **unverified**: this submission has no transcripts, so rounds 1, 2 and the final could not be re-checked. It is listed below every re-checked entry. Re-run with the current skill to submit a re-checked result. ${board}`;
   return `✅ Accepted. ${board}`;
 }
@@ -288,7 +317,6 @@ function sweep(repo: string): void {
     gh("issue", "close", String(i.number), "--reason", "completed");
   };
 
-  const hashes = acceptedHashes();
   const savedIds = new Set(existsSync(SUBS) ? readdirSync(SUBS).filter(f => f.endsWith(".json")).map(f => f.slice(0, -5)) : []);
   const verified: Verified[] = [];
   const toFinish: { i: OpenIssue; tier?: BoardEntry["tier"] }[] = [];
@@ -328,7 +356,7 @@ function sweep(repo: string): void {
       }
 
       const body = JSON.parse(gh("issue", "view", String(i.number), "--json", "body")).body as string;
-      const result = processSubmission(body, i.author, i.number, i.createdAt, hashes);
+      const result = processSubmissionGuarded(body, i.author, i.number, i.createdAt);
       if (!result.ok) {
         reject(i, [
           "❌ Not accepted. Verification found:", "",
@@ -414,6 +442,9 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     const r = processSubmission(readFileSync(file, "utf8"), arg("author") ?? "", Number(arg("issue")), arg("created-at") ?? new Date().toISOString(), acceptedHashes());
     if (r.ok) writeAccepted([r.accepted]);
     console.log(JSON.stringify(r.ok ? { ok: true, problems: [], reached: r.sub.reached, hired: r.sub.hired } : r));
+  } else if (command === "check") {
+    // 검증만 하고 아무것도 쓰지 않는다. sweep 이 제출마다 시간 제한을 걸어 부른다 (processSubmissionGuarded)
+    console.log(JSON.stringify(processSubmission(readFileSync(file, "utf8"), arg("author") ?? "", Number(arg("issue")), arg("created-at") ?? "", acceptedHashes())));
   } else if (command === "rebuild") {
     console.log(JSON.stringify({ entries: rebuildBoard().length }));
   } else {

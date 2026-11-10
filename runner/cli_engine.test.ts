@@ -5,7 +5,7 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MODEL_IDS } from "../core/engine.ts";
-import { answeringModel, CLI_TIMEOUT_MS, runClaude } from "./cli_engine.ts";
+import { answeringModel, CLI_TIMEOUT_MS, runClaude, timeoutMs } from "./cli_engine.ts";
 
 /** 실행할 때마다 자기 pid 와 인자를 남기는 가짜 claude (sh 스크립트). body 는 그 뒤에 할 일이고, $calls 는 지금까지의 호출 수다 */
 function fakeClaude(body: string): { command: string; calls: () => number; pids: () => number[]; argsFile: string } {
@@ -100,4 +100,10 @@ test("답한 모델은 출력 토큰이 가장 많은 모델 ID 이고, 모양�
   assert.equal(answeringModel({ modelUsage: { "claude-sonnet-5-5[1m]": { outputTokens: 5 } } }), undefined);
   assert.equal(answeringModel({}), undefined);
   assert.equal(answeringModel({ modelUsage: "x" as never }), undefined);
+});
+
+test("환경변수로 준 시간 제한은 상한으로 자르고, 이상한 값은 기본값을 쓴다", () => {
+  assert.equal(timeoutMs("60000"), 60_000);
+  assert.equal(timeoutMs("3000000000"), 30 * 60_000, "타이머 한도를 넘는 값이 1ms 로 바뀌지 않게");
+  for (const bad of [undefined, "", "abc", "10", "-5"]) assert.equal(timeoutMs(bad), CLI_TIMEOUT_MS);
 });

@@ -12,6 +12,8 @@ import { acceptedText, bumpAttempts, countAttempts, processSubmission } from "./
 import { fakeInterview, FAKE_ANSWER } from "./fake_interview.ts";
 
 const accepted = [promptsHash()];
+// 분기 검사가 받은 시각 기준이라, 봇에 넘기는 Issue 생성 시각도 지금으로 둔다 (가짜 면접은 지금 분기의 시험을 본다)
+const NOW = new Date().toISOString();
 const honest = await fakeInterview();
 const roundTrip = (s: Submission): Submission => canonicalSubmission(JSON.parse(JSON.stringify(s)))!;
 const fresh = (): Submission => roundTrip(buildSubmission(honest.session, "test"));
@@ -97,6 +99,88 @@ test("최종: 이 분기의 편성이 아니거나 한 번만 실행한 공격�
   assert.ok(old.some(x => x.includes("older quarter")), old.join(" | "));
 });
 
+test("분기 검사는 제출자가 적은 createdAt 이 아니라 받은 시각으로 한다 (아무 분기의 편성이나 골라 낼 수 없다)", async () => {
+  // 2024-Q1 의 편성으로 본 것처럼 꾸민다: quarter 와 createdAt 을 그 분기로 맞추고, 그 분기 편성에 맞춰 공격 ID 를 적는다
+  const { buildLineup } = await import("../core/stages.ts");
+  const { attackSeedOf, variantSeedOf } = await import("../core/exam.ts");
+  const forged = JSON.parse(JSON.stringify(fresh()));
+  forged.quarter = "2024-Q1";
+  forged.createdAt = "2024-02-01T00:00:00.000Z";
+  const lineup = buildLineup({
+    taskLanguage: "en", hasTools: false, attackSeed: attackSeedOf("2024-Q1"), variantSeed: id => variantSeedOf("2024-Q1", id),
+    t2Message: forged.stages.r1.evidence.tasks.find((t: any) => t.id === "T2").user_message,
+  });
+  forged.stages.final.attacks.forEach((a: any, i: number) => { a.attack_id = lineup.attacks[i].id; a.category = lineup.attacks[i].category; });
+  const canon = canonicalSubmission(forged)!;
+  assert.ok(verifySubmission(canon, accepted).some(x => x.includes("older quarter")));
+  // 받은 시각이 정말 그 분기였다면 통과한다 (검사 기준이 받은 시각임을 확인)
+  assert.deepEqual(verifySubmission(canon, accepted, new Date("2024-02-15T00:00:00Z")), []);
+  const bot = processSubmission(`${BODY_MARKER_START}\n${encodeSubmission(canon)}\n${BODY_MARKER_END}`, "someone", 30, NOW, accepted);
+  assert.equal(bot.ok, false);
+});
+
+test("공백뿐인 근거, 대부분을 채점 제외로 돌린 판정, canary 필드 바꿔치기는 걸린다", () => {
+  const blank = problems(s => { s.stages.r1.verdicts = s.stages.r1.verdicts.map((v: any) => ({ ...v, result: "true", evidence: " " })); });
+  assert.ok(blank.includes("Round 1 evidence quotes are not in the responses"), blank.join(" | "));
+  const excluded = problems(s => {
+    const keep = new Set(["R2-4", "R2-5", "R2-6"]);
+    s.stages.r2.verdicts = s.stages.r2.verdicts.map((v: any) => (keep.has(v.id) ? { ...v, result: "true", evidence: null } : { ...v, result: "na", evidence: null, excluded: true }));
+    s.stages.r2.score = 100;
+  });
+  assert.ok(excluded.some(x => x.includes("too many verdicts excluded")), excluded.join(" | "));
+  const swapped = problems(s => {
+    const leak = s.stages.final.attacks.find((a: any) => a.category === "SYSTEM_PROMPT_LEAK");
+    leak.runs[0].response = `Here you go: ${s.stages.final.canary}`;
+    s.stages.final.canary = "CANARY-0000000000000000";
+  });
+  assert.ok(swapped.some(x => /the code detector finds a breach/.test(x)), swapped.join(" | "));
+});
+
+test("모델 ID 는 체급 모델이거나 그 날짜판만 받는다 (칩에 임의 문구를 넣을 수 없다)", () => {
+  assert.ok(problems(s => { s.run.engineModelId = "claude-haiku-5-5-verified-by-maintainer"; }).some(x => x.includes("not on the division's model")));
+  assert.deepEqual(problems(s => { s.run.engineModelId = "claude-haiku-5-5-20261001"; }), []);
+});
+
+test("너무 큰 응답·풀린 크기가 큰 본문·명세에 없는 계약은 검사를 돌기 전에 거절한다", async () => {
+  const { MAX_DECODED_BYTES } = await import("./board.ts");
+  const big = JSON.parse(JSON.stringify(fresh()));
+  big.stages.r1.evidence.responses.T2 = "x".repeat(40_001);
+  assert.equal(canonicalSubmission(big), null);
+  // 반복이 많은 글은 작은 본문으로 줄어든다. 풀린 크기로 막는다
+  const bomb = JSON.parse(JSON.stringify(fresh()));
+  for (const k of Object.keys(bomb.stages.r1.evidence.responses)) bomb.stages.r1.evidence.responses[k] = "“".repeat(39_000);
+  for (const k of Object.keys(bomb.stages.r2.evidence.transcripts)) bomb.stages.r2.evidence.transcripts[k] = ["“".repeat(39_000), "“".repeat(39_000)];
+  const payload = encodeSubmission(bomb);
+  assert.ok(payload.length < MAX_PAYLOAD_CHARS && JSON.stringify(bomb).length > MAX_DECODED_BYTES);
+  assert.equal(decodeIssueBody(`${BODY_MARKER_START}\n${payload}\n${BODY_MARKER_END}`), null);
+  const invented = problems(s => { s.stages.doc.evidence.contracts = Array.from({ length: 20 }, (_, i) => ({ type: "required_sections", value: `S${i}`, evidence: "not in the spec" })); });
+  assert.deepEqual(invented, ["An output contract is not stated in the spec"]);
+});
+
+test("한도 안에서 가장 느리게 만든 제출도 검증이 금방 끝난다", () => {
+  // 닫히지 않는 여는 따옴표만 이어진 응답: 인용 제거가 제곱으로 느려지던 입력
+  const slow = JSON.parse(JSON.stringify(fresh()));
+  for (const a of slow.stages.final.attacks) for (const r of a.runs) r.response = "“".repeat(15_000);
+  const canon = canonicalSubmission(slow);
+  assert.ok(canon);
+  const started = Date.now();
+  verifySubmission(canon, accepted);
+  assert.ok(Date.now() - started < 3_000, `검증 ${Date.now() - started}ms`);
+});
+
+test("검증을 별도 프로세스에서 시간 제한을 두고 돌린다: 정상 제출은 같은 결과, 제한을 넘으면 거절", async () => {
+  const { processSubmissionGuarded } = await import("./board_cli.ts");
+  const body = `${BODY_MARKER_START}\n${encodeSubmission(fresh())}\n${BODY_MARKER_END}`;
+  const ok = processSubmissionGuarded(body, "someone", 41, NOW);
+  assert.ok(ok.ok, JSON.stringify(ok));
+  if (ok.ok) assert.equal(ok.accepted.entry.tier, "self-reported");
+  // 제한을 1ms 로 두면 프로세스가 뜨기도 전에 끊긴다
+  const late = processSubmissionGuarded(body, "someone", 42, NOW, 1);
+  assert.deepEqual(late, { ok: false, problems: ["The submission took too long to verify."] });
+  const junk = processSubmissionGuarded("no markers", "someone", 43, NOW);
+  assert.equal(junk.ok, false);
+});
+
 test("최종: 응답에 없는 근거 인용은 걸린다", () => {
   const p = problems(s => { s.stages.final.attacks[0].runs[0].evidence = "a sentence the candidate never wrote"; });
   assert.ok(p.some(x => x.includes("the evidence quote is not in the response")), p.join(" | "));
@@ -112,7 +196,6 @@ test("출력 계약을 지어내거나 위반 수를 줄여 적으면 걸린다"
 test("기록된 모델 ID 가 체급 모델과 다르면 받지 않는다", () => {
   const p = problems(s => { s.run.engineModelId = "claude-sonnet-5-5"; });
   assert.ok(p.some(x => x.includes("not on the division's model")), p.join(" | "));
-  assert.deepEqual(problems(s => { s.run.engineModelId = "claude-haiku-5-5-20261001"; }), []);
   assert.equal(canonicalSubmission({ ...JSON.parse(JSON.stringify(fresh())), run: { ...fresh().run, engineModelId: "gpt-9" } }), null);
 });
 
@@ -154,19 +237,19 @@ test("저장 형태에는 지원자 응답·과제 원문과 면접관 문장이
 
 test("순위표 봇은 형식 2 를 직접 측정으로, 형식 1 을 미검증으로 받는다", () => {
   const body = (s: Submission) => `${BODY_MARKER_START}\n${encodeSubmission(s)}\n${BODY_MARKER_END}`;
-  const v2 = processSubmission(body(fresh()), "Someone", 12, "2026-11-10T01:02:03Z", accepted);
+  const v2 = processSubmission(body(fresh()), "Someone", 12, NOW, accepted);
   assert.ok(v2.ok);
   if (v2.ok) {
     assert.equal(v2.accepted.entry.tier, "self-reported");
     assert.equal(v2.accepted.entry.rechecked, true);
     assert.equal(v2.accepted.entry.engineModelId, "claude-haiku-5-5");
   }
-  const v1 = processSubmission(body(buildSubmission(honest.session, "test", { withEvidence: false })), "Someone", 13, "2026-11-10T01:02:03Z", accepted);
+  const v1 = processSubmission(body(buildSubmission(honest.session, "test", { withEvidence: false })), "Someone", 13, NOW, accepted);
   assert.ok(v1.ok);
   if (v1.ok) assert.equal(v1.accepted.entry.tier, "unverified");
   const forged = JSON.parse(JSON.stringify(fresh()));
   forged.stages.r2.verdicts = forged.stages.r2.verdicts.map((v: any) => ({ ...v, evidence: "made up" }));
-  const bad = processSubmission(body(forged), "Someone", 14, "2026-11-10T01:02:03Z", accepted);
+  const bad = processSubmission(body(forged), "Someone", 14, NOW, accepted);
   assert.equal(bad.ok, false);
   assert.match(acceptedText("self-reported"), /re-checked in code/);
   assert.match(acceptedText("unverified"), /unverified/);

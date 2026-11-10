@@ -59,7 +59,11 @@ function loadAllStates(): SessionState[] {
   if (!existsSync(SESSIONS)) return [];
   return readdirSync(SESSIONS).filter(d => existsSync(statePath(d))).flatMap(d => {
     try {
-      return [JSON.parse(readFileSync(statePath(d), "utf8")) as SessionState];
+      const s = JSON.parse(readFileSync(statePath(d), "utf8")) as SessionState;
+      // 모양이 틀린 기록(다른 프로그램이 쓴 파일, 쓰다 만 파일)은 건너뛴다
+      const ok = !!s && typeof s === "object" && typeof s.session === "string" && typeof s.createdAt === "string"
+        && !!s.options && typeof s.options === "object" && !!s.stages && typeof s.stages === "object" && Array.isArray(s.reports);
+      return ok ? [s] : [];
     } catch {
       return []; // 손상된 기록 하나 때문에 전체가 멈추지 않게 한다
     }

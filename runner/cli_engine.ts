@@ -90,9 +90,12 @@ const CLI_ATTEMPTS = 3;
 /** 종료 신호를 무시하는 프로세스를 강제로 끝내기까지 기다리는 시간 */
 const KILL_GRACE_MS = 3_000;
 
-function timeoutMs(): number {
-  const v = Number(process.env.ARENA_CLI_TIMEOUT_MS);
-  return Number.isFinite(v) && v >= 1_000 ? v : CLI_TIMEOUT_MS;
+/** 환경변수로 늘릴 수 있는 상한. 타이머 한도(2^31-1 ms)를 넘는 값은 Node 가 1ms 로 바꿔 모든 호출이 바로 끊긴다 */
+const MAX_CLI_TIMEOUT_MS = 30 * 60_000;
+
+export function timeoutMs(raw: string | undefined = process.env.ARENA_CLI_TIMEOUT_MS): number {
+  const v = Number(raw);
+  return Number.isFinite(v) && v >= 1_000 ? Math.min(v, MAX_CLI_TIMEOUT_MS) : CLI_TIMEOUT_MS;
 }
 
 export type RunOptions = { command?: string; timeoutMs?: number; killGraceMs?: number; log?: (msg: string) => void };
