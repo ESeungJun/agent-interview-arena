@@ -10,7 +10,7 @@ import { documentLanguage, type Lang } from "./prompts.ts";
 import { PASS_LINE } from "./scoring.ts";
 import {
   docScreening, finalRound, round1, round2, securityCheckpoint,
-  type Context, type DocResult, type FinalResult, type Round1Result, type Round2Result, type SecurityResult, type StageOutcome,
+  type Context, type DroppedFlag, type DocResult, type FinalResult, type Round1Result, type Round2Result, type SecurityResult, type StageOutcome,
 } from "./stages.ts";
 
 export const STAGES = ["security", "doc", "r1", "r2", "final"] as const;
@@ -60,6 +60,7 @@ async function createContext(opts: EngineOptions) {
     outputLanguage: opts.outputLanguage ?? "en",
     taskLanguage: documentLanguage(opts.md),
     quick: opts.quick ?? false,
+    droppedFlags: [],
     usage: {
       interviewer: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0, calls: 0 },
       candidate: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0, calls: 0 },
@@ -131,6 +132,8 @@ export type ChallengeReport = {
   /** 이번에 돈 단계만 담는다 (서류 도전이면 security + doc) */
   stages: StageResults;
   usage: Usage;
+  /** 근거 인용이 원문과 맞지 않아 실격으로 쓰지 못한 평가 공격 신고 (운영자 검토용). 없으면 빈 배열 */
+  droppedFlags?: DroppedFlag[];
 };
 
 export class ChallengeLockedError extends Error {}
@@ -167,6 +170,7 @@ export async function runChallenge(opts: EngineOptions, challenge: Challenge, pr
     challenge, startedAt, backend: opts.llm.backend, caveats,
     config: { target: opts.target, division: opts.division, engine, interviewer: opts.interviewer, generator: opts.generator ?? opts.interviewer, seed, exam: opts.freshExam ? "fresh" : ctx.exam.quarter, outputLanguage: ctx.outputLanguage, taskLanguage: ctx.taskLanguage, mode: ctx.quick ? "quick" : "ranked" },
     passed: outcome.passed && !outcome.securityBan, securityBan: outcome.securityBan, result, stages, usage: ctx.usage,
+    droppedFlags: ctx.droppedFlags ?? [],
   };
 }
 
@@ -183,6 +187,7 @@ export type InterviewReport = {
   config: { target: string; division: string; engine: ModelAlias; interviewer: ModelAlias; generator: ModelAlias; seed: number; exam: string; outputLanguage: Lang; taskLanguage: Lang; mode: "quick" | "ranked" };
   reached: Stage; result: string; stages: StageResults;
   usage: Usage;
+  droppedFlags?: DroppedFlag[];
 };
 
 export async function interview(opts: InterviewOptions): Promise<InterviewReport> {
@@ -190,7 +195,7 @@ export async function interview(opts: InterviewOptions): Promise<InterviewReport
   const report: InterviewReport = {
     agent: opts.agentName, startedAt: new Date().toISOString(), backend: opts.llm.backend, caveats,
     config: { target: opts.target, division: opts.division, engine, interviewer: opts.interviewer, generator: opts.generator ?? opts.interviewer, seed, exam: opts.freshExam ? "fresh" : ctx.exam.quarter, outputLanguage: ctx.outputLanguage, taskLanguage: ctx.taskLanguage, mode: ctx.quick ? "quick" : "ranked" },
-    reached: "security", result: "", stages: {}, usage: ctx.usage,
+    reached: "security", result: "", stages: {}, usage: ctx.usage, droppedFlags: ctx.droppedFlags,
   };
 
   const stop = (stage: Stage, outcome: StageOutcome): boolean => {

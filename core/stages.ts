@@ -2,11 +2,11 @@
 import type { ConverseResult, Llm, ModelAlias } from "./engine.ts";
 import { mulberry32, type Exam } from "./exam.ts";
 import { absentFailures, applyRechecks, completeDocVerdicts, linkFeedback, parseChecklist, requiredDocIds, type Recheck } from "./doc_review.ts";
-import { runSecurityGate, type GateResult } from "./gate.ts";
+import { normalizeForGate, runSecurityGate, type GateResult } from "./gate.ts";
 import { candidateSystem, interviewerSystem, LANG_NAME, loadSchema, newNonce, readAsset, restrictVerdicts, wrap, type Lang } from "./prompts.ts";
 import { checkContracts, runAttackDetectors, type Contract, type DetectorHit, type DetectorName } from "./detectors.ts";
 import {
-  LOW_CONFIDENCE_RATIO, PASS_LINE, R1_PER_RESPONSE, R2_ITEM_ID, R2_PER_RUN, cleanTargets, fillMissingItems, finalizeRound1, keepKnown, disputedItems, excludeUnverified, majorityVerdicts, scoreDoc, scoreRound1, scoreRound2, validateEvidence,
+  LOW_CONFIDENCE_RATIO, PASS_LINE, R1_PER_RESPONSE, R2_ITEM_ID, R2_PER_RUN, cleanTargets, fillMissingItems, finalizeRound1, keepKnown, disputedItems, excludeUnverified, majorityVerdicts, normalizeQuote, scoreDoc, scoreRound1, scoreRound2, validateEvidence,
   type Verdict,
 } from "./scoring.ts";
 import { renderAttack, type AttackTemplate } from "./attack_variants.ts";
@@ -31,7 +31,13 @@ export type Context = {
   taskLanguage: Lang;
   /** 연습 모드: 1·2차를 면접관 한 명이 채점하고 2차 시나리오를 한 번씩만 돌린다. 순위표에는 올라가지 않는다. */
   quick: boolean;
+  /**
+   * 면접관·분류 모델이 평가 공격이라고 신고했지만 근거 인용이 원문과 맞지 않아 실격으로 쓰지 못한 신고.
+   * 실격시키지는 않되 버린 흔적을 결과에 남겨 운영자가 볼 수 있게 한다. 없으면 기록하지 않는다 (예전 호출부).
+   */
+  droppedFlags?: DroppedFlag[];
 };
+export type DroppedFlag = { stage: string; evidence: string | null; reason: string | null };
 /** costUsd 는 가격을 모르는 모델이 한 번이라도 섞이면 null 이다 (0 으로 적으면 비용 합계가 조용히 줄어든다) */
 type Usage = { inputTokens: number; outputTokens: number; cacheReadTokens: number; costUsd: number | null; calls: number };
 
@@ -85,12 +91,35 @@ async function askCandidate(ctx: Context, canary: string, userTurns: string[]): 
 
 export type SecurityFlag = { raised: boolean; evidence: string | null; reason: string | null };
 
+/**
+ * 신고 근거가 원문에 있는가. 판정 인용과 같은 정규화(공백·줄바꿈·diff 줄머리)를 쓰고,
+ * 검문소 정규화(전각·이형 선택자·빈 태그)를 거친 모양으로 옮겨 적은 인용도 인정한다.
+ */
+export function evidenceInSource(evidence: string | null | undefined, md: string): boolean {
+  if (!evidence || !normalizeQuote(evidence)) return false;
+  const plain = normalizeQuote(evidence);
+  if (normalizeQuote(md).includes(plain)) return true;
+  return normalizeQuote(normalizeForGate(md)).includes(normalizeQuote(normalizeForGate(evidence)));
+}
+
 /** 면접관이 올린 보안 플래그는 근거가 원문에 실제로 있을 때만 실격 사유로 인정한다. */
 function flagToBan(flag: SecurityFlag | undefined, md: string): StageOutcome["securityBan"] | undefined {
-  if (!flag?.raised || !flag.evidence) return undefined;
-  const norm = (s: string) => s.replace(/\s+/g, " ");
-  if (!norm(md).includes(norm(flag.evidence))) return undefined;
+  if (!flag?.raised || !evidenceInSource(flag.evidence, md)) return undefined;
   return { rule: "INTERVIEWER_SECURITY_FLAG", reason: flag.reason ?? "면접관이 평가 시스템 공격을 감지", evidence: flag.evidence };
+}
+
+/**
+ * 올라온 신고 중 근거가 원문과 맞지 않아 버리는 것을 로그와 결과에 남긴다. 실격 여부는 바꾸지 않는다.
+ * 같은 단계에서 같은 신고를 두 번 적지 않는다.
+ */
+export function noteDroppedFlags(ctx: Pick<Context, "md" | "log" | "droppedFlags">, stage: string, flags: (SecurityFlag | undefined)[]): void {
+  for (const f of flags) {
+    if (!f?.raised || evidenceInSource(f.evidence, ctx.md)) continue;
+    const seen = ctx.droppedFlags?.some(d => d.stage === stage && d.evidence === (f.evidence ?? null) && d.reason === (f.reason ?? null));
+    if (seen) continue;
+    ctx.log(`  ⚠️ ${stage}: 면접관이 평가 공격을 신고했지만 근거 인용이 원문에 없음 → 실격하지 않고 운영자 검토 대상으로 기록`);
+    ctx.droppedFlags?.push({ stage, evidence: f.evidence ?? null, reason: f.reason ?? null });
+  }
 }
 
 /**
@@ -191,12 +220,14 @@ async function voted<T extends { verdicts: Verdict[]; security_flag: SecurityFla
   // 두 면접관이 같게 본 항목은 세 번째 표로 뒤집히지 않는다. 갈린 항목만 세 번째 면접관에게 물어 비용을 줄인다.
   // 앞 둘은 차례로 보내야 두 번째가 첫 번째의 캐시를 읽는다.
   const first = await ballot();
+  noteDroppedFlags(ctx, label, [first.security_flag]);
   if (ctx.quick) {
     const verdicts = finish(await fillGaps(first.verdicts, [first.security_flag]));
     const s = score(verdicts);
     return { out: { ...first, verdicts, security_flag: pickSecurityFlag([first.security_flag], ctx.md)! }, ...s, runs: [s.score], lowConfidence: droppedTooMany() || singleVote };
   }
   const second = await ballot();
+  noteDroppedFlags(ctx, label, [second.security_flag]);
   const disputed = disputedItems(first.verdicts, second.verdicts);
   const wanted = new Set(disputed.map(keyOf));
   const third = disputed.length > 0 ? await ballot(disputed) : undefined;
@@ -247,12 +278,14 @@ export async function securityCheckpoint(ctx: Context): Promise<SecurityResult> 
     "security_screener",
   );
   const attack = screener.classification === "EVAL_SYSTEM_ATTACK" || screener.classification === "AGENT_MISUSE";
-  const norm = (s: string) => s.replace(/\s+/g, " ");
-  const evidenceOk = !!screener.evidence && norm(ctx.md).includes(norm(screener.evidence));
+  const evidenceOk = evidenceInSource(screener.evidence, ctx.md);
   if (attack && evidenceOk) {
     return { passed: false, gate, screener, securityBan: { rule: screener.classification, reason: screener.reason, evidence: screener.evidence } };
   }
-  if (attack) ctx.log("  ⚠️ 분류기가 공격으로 판정했지만 근거가 원문에 없음 → 실격하지 않고 운영자 검토 대상으로 기록");
+  if (attack) {
+    ctx.log("  ⚠️ 분류기가 공격으로 판정했지만 근거가 원문에 없음 → 실격하지 않고 운영자 검토 대상으로 기록");
+    ctx.droppedFlags?.push({ stage: "보안 검문소", evidence: screener.evidence ?? null, reason: screener.reason ?? null });
+  }
   return { passed: true, gate, screener };
 }
 
@@ -356,6 +389,7 @@ export async function docScreening(ctx: Context): Promise<DocResult> {
   const checklist = parseChecklist(readAsset("prompts/interviewer_doc_screening.md"));
   const j = await judgedOnce(ctx, "서류전형", ask, [ctx.md], vs => scoreDoc(vs, ctx.target));
   let securityFlag = j.out.security_flag;
+  noteDroppedFlags(ctx, "서류전형", [securityFlag]);
   let securityBan = flagToBan(securityFlag, ctx.md);
   let lowConfidence = j.lowConfidence;
   // 판정 id 를 체크리스트 모양으로 맞춘다. 빠뜨린 항목은 흔들리는 항목 표결 뒤에 채워, 빠뜨린 항목까지 표결에 끌어들이지 않는다
@@ -369,6 +403,7 @@ export async function docScreening(ctx: Context): Promise<DocResult> {
     verdicts = m.verdicts;
     ({ score, breakdown } = scoreDoc(verdicts, ctx.target));
     marginCheck = { scoreBefore };
+    noteDroppedFlags(ctx, "서류전형", [m.securityFlag]);
     securityFlag = pickSecurityFlag([securityFlag, m.securityFlag], ctx.md)!;
     securityBan = flagToBan(securityFlag, ctx.md);
     lowConfidence ||= m.undecided / Math.max(1, verdicts.length) > LOW_CONFIDENCE_RATIO;
@@ -485,6 +520,7 @@ export async function round1(ctx: Context, doc: DocOutput): Promise<Round1Result
         `mode: GENERATE_TASKS\ntask_language: ${LANG_NAME[ctx.taskLanguage]}\n${profileBlock(doc)}\n\n${wrap("submission", genNonce, ctx.md)}`,
         "round1_tasks", false, ctx.generator ?? ctx.interviewer,
       );
+      noteDroppedFlags(ctx, "1차 출제", [gen.security_flag]);
       const ban = generationBan(gen.security_flag, ctx.md);
       if (ban) return { ...ban, tasks: [], responses: {}, contractViolations: {} };
       if (validTasks(gen.tasks)) tasks = gen.tasks;
@@ -626,6 +662,7 @@ export async function round2(ctx: Context, doc: DocOutput, docVerdicts: Verdict[
     let problem = "";
     for (let attempt = 1; attempt <= GEN_ATTEMPTS && !scenarios; attempt++) {
       const gen = await generate();
+      noteDroppedFlags(ctx, "2차 출제", [gen.security_flag]);
       const ban = generationBan(gen.security_flag, ctx.md);
       if (ban) return { ...ban, scenarios: [], transcripts: {} };
       if (!validScenarios(gen.scenarios)) problem = "시나리오 S1~S3가 비어 있거나 모자람";
