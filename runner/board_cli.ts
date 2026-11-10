@@ -98,10 +98,17 @@ export function planWrite<T extends { a: Accepted }>(accepted: T[], current: Boa
   return { write, remove: [...remove], superseded, dropped, saved };
 }
 
-function writeAccepted(list: Accepted[], remove: string[] = []): void {
+function writeAccepted(list: Accepted[], remove: string[] = [], bumped: BoardEntry[] = []): void {
   mkdirSync(SUBS, { recursive: true });
   for (const id of remove) rmSync(join(SUBS, `${id}.json`), { force: true });
   for (const a of list) writeFileSync(join(SUBS, `${a.id}.json`), `${JSON.stringify({ entry: a.entry, submission: a.stored }, null, 2)}\n`);
+  // 시도 수만 올리는 기록: 파일의 다른 내용은 그대로 두고 entry.attempts 만 바꾼다
+  for (const e of bumped) {
+    const f = join(SUBS, `${e.id}.json`);
+    if (!existsSync(f) || remove.includes(e.id) || list.some(a => a.id === e.id)) continue;
+    const stored = JSON.parse(readFileSync(f, "utf8")) as { entry: BoardEntry; submission: Submission };
+    writeFileSync(f, `${JSON.stringify({ ...stored, entry: { ...stored.entry, attempts: e.attempts } }, null, 2)}\n`);
+  }
   rebuildBoard();
 }
 
@@ -152,7 +159,30 @@ function ghPage<T>(path: string, jq: string): T[] {
   return run("gh", ["api", path, "--jq", jq]).split("\n").filter(Boolean).map(l => JSON.parse(l) as T);
 }
 
-const ACCEPTED_TEXT = `✅ Accepted as **self-reported**. The leaderboard updates in a minute: ${BOARD_URL}`;
+/** 접수 답글. 등급을 모르면(지난 실행이 접수한 건의 답글만 마저 달 때) 등급 없이 답한다 */
+export function acceptedText(tier?: BoardEntry["tier"]): string {
+  const board = `The leaderboard updates in a minute: ${BOARD_URL}`;
+  if (tier === "self-reported") return `✅ Accepted as **self-reported**: the transcripts were re-checked in code (quoted evidence, output contracts, this quarter's attack line-up and the leak detectors). The interview itself was not re-run. ${board}`;
+  if (tier === "unverified") return `✅ Accepted as **unverified**: this submission has no transcripts, so rounds 1, 2 and the final could not be re-checked. It is listed below every re-checked entry. Re-run with the current skill to submit a re-checked result. ${board}`;
+  return `✅ Accepted. ${board}`;
+}
+
+const DIVISION_IN_TITLE = /\((light|middle|open)\)\s*$/;
+/**
+ * 이 사람이 이 체급에 낸 제출 수 (이 Issue 까지). 순위표는 체급마다 가장 좋은 기록 하나만 남기므로,
+ * 여러 번 내어 잘 나온 판을 남긴 기록인지 알 수 있게 항목 옆에 적는다.
+ * 체급은 Issue 제목 끝의 "(light)" 로 센다. 제목은 작성자가 고칠 수 있어 정확한 값이 아니라 하한이다.
+ */
+export function countAttempts(rows: { number: number; title: string }[], issue: number, division: string): number {
+  const earlier = rows.filter(r => r.number < issue && DIVISION_IN_TITLE.exec(r.title)?.[1] === division).length;
+  return earlier + 1;
+}
+
+/** 받지 않은(더 좋은 기록이 이미 있는) 제출도 시도 수에는 들어간다. 그 칸에 남아 있는 기록들의 시도 수를 올린다 */
+export function bumpAttempts(entries: BoardEntry[], dropped: BoardEntry): BoardEntry[] {
+  const attempts = dropped.attempts ?? 0;
+  return entries.filter(e => slotOf(e) === slotOf(dropped) && (e.attempts ?? 0) < attempts).map(e => ({ ...e, attempts }));
+}
 
 function sweep(repo: string): void {
   if (!/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(repo)) throw new Error(`bad repo: ${repo}`);
@@ -206,16 +236,20 @@ function sweep(repo: string): void {
 
   // 작성자별 값은 한 번만 받는다 (같은 사람이 Issue 를 몰아 열어도 API 호출이 늘지 않게)
   const labeledCache = new Map<string, Map<number, number>>();
+  // 같은 목록의 제목: 체급별 시도 수를 세는 데 쓴다 (최신 100건까지라 그보다 많으면 하한이다)
+  const titlesCache = new Map<string, { number: number; title: string }[]>();
   const labeledBy = (author: string) => {
     const key = author.toLowerCase();
     let m = labeledCache.get(key);
     if (!m) {
       // 최신 100건이면 충분하다: 24시간 안의 것이 100건을 넘으면 어차피 한도(5건)를 넘는다
-      m = new Map(ghPage<[number, string]>(
+      const rows = ghPage<[number, string, string]>(
         `repos/${repo}/issues?state=all&creator=${author}&labels=${LABEL}&sort=created&direction=desc&per_page=100`,
-        ".[] | [.number, .created_at]",
-      ).map(([n, c]) => [n, Date.parse(c)]));
+        ".[] | [.number, .created_at, .title]",
+      );
+      m = new Map(rows.map(([n, c]) => [n, Date.parse(c)]));
       labeledCache.set(key, m);
+      titlesCache.set(key, rows.map(([number, , title]) => ({ number, title: String(title ?? "") })));
     }
     return m;
   };
@@ -248,23 +282,23 @@ function sweep(repo: string): void {
     gh("issue", "close", String(i.number), "--reason", "not planned");
   };
   // 접수: 접수 표시 → 답글 → 닫기. 표시가 먼저라 답글이 실패해도 다음 실행이 다시 검증하지 않는다
-  const finish = (i: OpenIssue) => {
+  const finish = (i: OpenIssue, tier?: BoardEntry["tier"]) => {
     addLabel(i, ACCEPTED_LABEL);
-    reply(i, ACCEPTED_TEXT);
+    reply(i, acceptedText(tier));
     gh("issue", "close", String(i.number), "--reason", "completed");
   };
 
   const hashes = acceptedHashes();
   const savedIds = new Set(existsSync(SUBS) ? readdirSync(SUBS).filter(f => f.endsWith(".json")).map(f => f.slice(0, -5)) : []);
   const verified: Verified[] = [];
-  const toFinish: OpenIssue[] = [];
+  const toFinish: { i: OpenIssue; tier?: BoardEntry["tier"] }[] = [];
   const toReject: { i: OpenIssue; text: string }[] = [];
 
   for (const i of open) {
     try {
       const t = triage(i, now, savedIds);
       if (t === "finish") {
-        toFinish.push(i);
+        toFinish.push({ i });
         continue;
       }
       if (t === "reclose") {
@@ -303,7 +337,11 @@ function sweep(repo: string): void {
         ].join("\n"));
         continue;
       }
-      verified.push({ i, a: result.accepted, division: result.sub.options.division });
+      // 이 사람이 이 체급에 낸 제출 수 (지금 Issue 포함). 지금 Issue 는 제목이 아니라 제출물의 체급으로 센다
+      const division = result.sub.options.division;
+      const attempts = countAttempts((titlesCache.get(i.author.toLowerCase()) ?? []).filter(r => r.number !== i.number), i.number, division);
+      result.accepted.entry.attempts = attempts;
+      verified.push({ i, a: result.accepted, division });
     } catch (e) {
       // gh·네트워크 같은 일시 오류. 열어 둔 채로 두면 다음 주기가 다시 처리하고, 6시간이 지나면 닫는다
       errors.push(`issue #${i.number}: ${(e as Error).message}`);
@@ -317,11 +355,14 @@ function sweep(repo: string): void {
       try {
         git("fetch", "origin", "main");
         git("reset", "--hard", "origin/main");
-        const p = planWrite(verified, readEntries());
-        if (p.write.length > 0) {
-          writeAccepted(p.write.map(x => x.a), p.remove);
+        const current = readEntries();
+        const p = planWrite(verified, current);
+        // 받지 않은 제출도 시도 수에는 들어간다. 그 칸에 남은 기록의 시도 수를 올린다
+        const bumped = p.dropped.flatMap(x => bumpAttempts(current, x.a.entry));
+        if (p.write.length > 0 || bumped.length > 0) {
+          writeAccepted(p.write.map(x => x.a), p.remove, bumped);
           git("add", "docs/submissions", "docs/leaderboard.json");
-          git("commit", "-m", `순위표: ${p.write.map(x => `#${x.i.number}`).join(" ")} 제출 추가`);
+          git("commit", "-m", p.write.length > 0 ? `순위표: ${p.write.map(x => `#${x.i.number}`).join(" ")} 제출 추가` : "순위표: 시도 수 갱신");
           git("push", "origin", "HEAD:main");
         }
         plan = p;
@@ -330,7 +371,7 @@ function sweep(repo: string): void {
       }
     }
     if (plan) {
-      toFinish.push(...[...plan.write, ...plan.superseded, ...plan.saved].map(x => x.i));
+      toFinish.push(...[...plan.write, ...plan.superseded, ...plan.saved].map(x => ({ i: x.i, tier: x.a.entry.tier })));
       for (const x of plan.dropped) {
         toReject.push({ i: x.i, text: `❌ Not accepted: you already have an equal or better entry in the ${x.division} division. Only your best result per division is listed.` });
       }
@@ -338,9 +379,9 @@ function sweep(repo: string): void {
   }
 
   // 한 건이 실패해도 나머지는 계속한다. 실패한 건은 남은 표시를 보고 다음 주기가 이어서 처리한다
-  for (const i of toFinish) {
+  for (const { i, tier } of toFinish) {
     try {
-      finish(i);
+      finish(i, tier);
     } catch (e) {
       errors.push(`finish #${i.number}: ${(e as Error).message}`);
     }

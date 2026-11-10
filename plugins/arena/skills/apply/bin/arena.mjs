@@ -250,9 +250,9 @@ var init_values = __esm({
       }
       return n;
     };
-    safeJSON = (text) => {
+    safeJSON = (text2) => {
       try {
-        return JSON.parse(text);
+        return JSON.parse(text2);
       } catch (err) {
         return void 0;
       }
@@ -2890,12 +2890,12 @@ function requireSecureTokenEndpoint(baseURL) {
   throw new WorkloadIdentityError(`Refusing to send credential over non-https token endpoint "${baseURL}"`);
 }
 async function parseTokenResponse(resp, requestId) {
-  const text = await readLimitedText(resp);
+  const text2 = await readLimitedText(resp);
   let data;
   try {
-    data = JSON.parse(text);
+    data = JSON.parse(text2);
   } catch {
-    throw new WorkloadIdentityError(`Token endpoint returned non-JSON response (status ${resp.status})`, resp.status, redactSensitive(text), requestId);
+    throw new WorkloadIdentityError(`Token endpoint returned non-JSON response (status ${resp.status})`, resp.status, redactSensitive(text2), requestId);
   }
   if (!data.access_token) {
     throw new WorkloadIdentityError(`Token endpoint response missing access_token: ${JSON.stringify(redactSensitive(data))}`, resp.status, redactSensitive(data), requestId);
@@ -3342,8 +3342,8 @@ function setContentAttributes(span, attributes, limit2) {
   };
   const values = {};
   const blocks = toolResult?.map((block) => JSON.stringify(block));
-  const length = [...stopSequences ?? [], ...blocks ?? []].reduce((sum, text) => sum + text.length + 1, 2) + serialize(others, values) + serialize(messages, values);
-  const sizeOf = 3 * length <= limit2 ? (text) => 3 * text.length : utf8Length;
+  const length = [...stopSequences ?? [], ...blocks ?? []].reduce((sum, text2) => sum + text2.length + 1, 2) + serialize(others, values) + serialize(messages, values);
+  const sizeOf = 3 * length <= limit2 ? (text2) => 3 * text2.length : utf8Length;
   const sizeOfMessages = () => Object.keys(messages).reduce((sum, key) => sum + sizeOf(values[key] ?? ""), 0);
   const stopSequencesSize = stopSequences?.reduce((sum, each) => sum + sizeOf(each), 0) ?? 0;
   const keepsStopSequences = stopSequences !== void 0 && stopSequencesSize <= limit2;
@@ -3462,15 +3462,15 @@ function truncateToolResultContent(blocks, limit2, sizeOf) {
   }
   return { json: "[" + kept.join(",") + "]", size, truncated: kept.length < blocks.length };
 }
-function utf8Length(text) {
+function utf8Length(text2) {
   let size = 0;
-  for (let index = 0; index < text.length; index++) {
-    const unit = text.charCodeAt(index);
+  for (let index = 0; index < text2.length; index++) {
+    const unit = text2.charCodeAt(index);
     if (unit < 128) {
       size += 1;
     } else if (unit < 2048) {
       size += 2;
-    } else if (unit >= 55296 && unit < 56320 && (text.charCodeAt(index + 1) & 64512) === 56320) {
+    } else if (unit >= 55296 && unit < 56320 && (text2.charCodeAt(index + 1) & 64512) === 56320) {
       size += 4;
       index++;
     } else {
@@ -4322,8 +4322,8 @@ function oidcFederationProvider(config) {
     }
     const requestId = resp.headers.get("Request-Id");
     if (!resp.ok) {
-      const text = await resp.text().catch(() => "");
-      const redacted = redactSensitive(text);
+      const text2 = await resp.text().catch(() => "");
+      const redacted = redactSensitive(text2);
       let hint = "";
       if (resp.status === 401) {
         const hintMiddle = config.workspaceId ? "" : "If your federation rule is scoped to multiple workspaces, set the ANTHROPIC_WORKSPACE_ID environment variable, the 'workspace_id' config key, or the `workspaceId` option. ";
@@ -4403,8 +4403,8 @@ function userOAuthProvider(config) {
     }
     const requestId = resp.headers.get("Request-Id");
     if (!resp.ok) {
-      const text = await resp.text().catch(() => "");
-      throw new WorkloadIdentityError(`User OAuth refresh failed (HTTP ${resp.status}): ${redactSensitive(text)}`, resp.status, redactSensitive(text), requestId);
+      const text2 = await resp.text().catch(() => "");
+      throw new WorkloadIdentityError(`User OAuth refresh failed (HTTP ${resp.status}): ${redactSensitive(text2)}`, resp.status, redactSensitive(text2), requestId);
     }
     const data = await parseTokenResponse(resp, requestId);
     const expiresIn = Number(data.expires_in);
@@ -4601,8 +4601,8 @@ async function defaultParseResponse(client, props) {
       const json = await response.json();
       return addResponseIDs(json, response);
     }
-    const text = await response.text();
-    return text;
+    const text2 = await response.text();
+    return text2;
   })().finally(() => {
     if (!props.options.stream && !props.options.__binaryResponse) {
       releaseRequestSignal(props.controller);
@@ -9049,11 +9049,11 @@ var init_ToolError = __esm({
 });
 
 // node_modules/@anthropic-ai/sdk/lib/internal/toolsets/sanitize.mjs
-function wellFormed(text) {
-  return text.replace(LONE_SURROGATE_RE, "\uFFFD");
+function wellFormed(text2) {
+  return text2.replace(LONE_SURROGATE_RE, "\uFFFD");
 }
-function oneLine(text, limit2 = FIELD_MAX) {
-  return cutPoints(wellFormed(text).replace(CONTROL_RE, " ").trim(), limit2);
+function oneLine(text2, limit2 = FIELD_MAX) {
+  return cutPoints(wellFormed(text2).replace(CONTROL_RE, " ").trim(), limit2);
 }
 function logSafe(name) {
   return oneLine(name, LOG_MAX);
@@ -9067,18 +9067,18 @@ function thrownErrorText(e) {
 function errorText(error) {
   return cutPoints(wellFormed(thrownErrorText(error)), FIELD_MAX);
 }
-function cutPoints(text, limit2) {
-  if (text.length <= limit2)
-    return text;
+function cutPoints(text2, limit2) {
+  if (text2.length <= limit2)
+    return text2;
   let end = 0;
   let points = 0;
-  for (const ch of text) {
+  for (const ch of text2) {
     if (points === limit2)
       break;
     points += 1;
     end += ch.length;
   }
-  return text.slice(0, end);
+  return text2.slice(0, end);
 }
 function errorTextContent(content) {
   if (typeof content === "string")
@@ -26218,15 +26218,15 @@ function attackSeedOf(quarter, secret = LOCAL_EXAM_SECRET) {
 async function openExam(md, opts) {
   const quarter = quarterOf(opts.date ?? /* @__PURE__ */ new Date());
   const hash = mdHash(md);
-  const record = !opts.fresh && await opts.store.load(quarter, hash) || { quarter, mdHash: hash };
+  const record2 = !opts.fresh && await opts.store.load(quarter, hash) || { quarter, mdHash: hash };
   return {
     quarter,
     attackSeed: attackSeedOf(quarter, opts.secret),
     variantSeed: (attackId) => variantSeedOf(quarter, attackId, opts.secret),
-    get: (key) => record[key],
+    get: (key) => record2[key],
     set: async (key, value) => {
-      record[key] = value;
-      if (!opts.fresh) await opts.store.save(record);
+      record2[key] = value;
+      if (!opts.fresh) await opts.store.save(record2);
     }
   };
 }
@@ -26237,12 +26237,12 @@ function newNonce() {
   return randomBytes(8).toString("hex");
 }
 function readAsset(relPath) {
-  const text = ASSETS[relPath];
-  if (text === void 0) {
+  const text2 = ASSETS[relPath];
+  if (text2 === void 0) {
     const hint = relPath.startsWith("prompts/") ? "\uBA74\uC811\uAD00 \uD504\uB86C\uD504\uD2B8(prompts/)\uAC00 \uC0DD\uC131 \uBAA8\uB4C8\uC5D0 \uC5C6\uC2B5\uB2C8\uB2E4. `node runner/bundle_assets.ts` \uC2E4\uD589 \uD544\uC694" : "`node runner/bundle_assets.ts` \uC2E4\uD589 \uD544\uC694";
     throw new Error(`\uB0B4\uC7A5 \uC790\uC0B0 \uC5C6\uC74C: ${relPath} (${hint})`);
   }
-  return text;
+  return text2;
 }
 function restrictVerdicts(schema, targets, ids) {
   const out2 = structuredClone(schema);
@@ -26572,8 +26572,8 @@ function runSecurityGate(md) {
   if (invisible) return ban("INVISIBLE_UNICODE", "\uC740\uB2C9 \uC720\uB2C8\uCF54\uB4DC \uBB38\uC790\uAC00 \uD3EC\uD568\uB418\uC5B4 \uC788\uC2B5\uB2C8\uB2E4.", codepoints(invisible[0]));
   const flood = md.match(FLOOD);
   if (flood) return ban("REPETITION_FLOOD", "\uB3C4\uBC30\uC131 \uBC18\uBCF5 \uBB38\uC790\uC5F4\uC774 \uAC10\uC9C0\uB418\uC5C8\uC2B5\uB2C8\uB2E4.", flood[1]);
-  const text = normalizeForGate(md);
-  const views = text === md ? [md] : [md, text];
+  const text2 = normalizeForGate(md);
+  const views = text2 === md ? [md] : [md, text2];
   const tag = views.map((v) => v.match(SANDBOX_TAG)).find(Boolean);
   if (tag) return ban("SANDBOX_TAG", "\uBA74\uC811\uC7A5 \uACA9\uB9AC \uD0DC\uADF8\uB97C \uBAA8\uBC29\uD55C \uD0C8\uCD9C \uC2DC\uB3C4\uAC00 \uAC10\uC9C0\uB418\uC5C8\uC2B5\uB2C8\uB2E4.", tag[0]);
   const softHits = /* @__PURE__ */ new Set();
@@ -26603,12 +26603,12 @@ function codepoints(s) {
 // core/detectors.ts
 function checkContracts(response, contracts) {
   const v = [];
-  const text = response.trim();
+  const text2 = response.trim();
   for (const c of contracts) {
     const list2 = c.value.split(",").map((s) => s.trim()).filter(Boolean);
     switch (c.type) {
       case "json_output": {
-        const parsed = parseJsonLoose(text);
+        const parsed = parseJsonLoose(text2);
         if (parsed === void 0) v.push({ contract: "json_output", detail: "JSON\uC73C\uB85C \uD30C\uC2F1\uB418\uC9C0 \uC54A\uC74C" });
         else {
           const missing = list2.filter((k) => !(typeof parsed === "object" && parsed !== null && k in parsed));
@@ -26618,47 +26618,47 @@ function checkContracts(response, contracts) {
       }
       case "max_chars": {
         const max = Number(c.value);
-        if (max > 0 && [...text].length > max) v.push({ contract: "max_chars", detail: `${[...text].length}\uC790 > ${max}\uC790` });
+        if (max > 0 && [...text2].length > max) v.push({ contract: "max_chars", detail: `${[...text2].length}\uC790 > ${max}\uC790` });
         break;
       }
       case "max_lines": {
         const max = Number(c.value);
-        const lines = text.split("\n").length;
+        const lines = text2.split("\n").length;
         if (max > 0 && lines > max) v.push({ contract: "max_lines", detail: `${lines}\uC904 > ${max}\uC904` });
         break;
       }
       case "language": {
-        const lang = detectLanguage(text);
+        const lang = detectLanguage(text2);
         if (lang && c.value.trim() && lang !== c.value.trim()) v.push({ contract: "language", detail: `${lang} \uC751\uB2F5 (\uC57D\uC18D: ${c.value})` });
         break;
       }
       case "required_sections":
-        for (const s of list2) if (!text.includes(s)) v.push({ contract: "required_sections", detail: `"${s}" \uC5C6\uC74C` });
+        for (const s of list2) if (!text2.includes(s)) v.push({ contract: "required_sections", detail: `"${s}" \uC5C6\uC74C` });
         break;
       case "forbidden_phrases":
-        for (const s of list2) if (text.includes(s)) v.push({ contract: "forbidden_phrases", detail: `"${s}" \uD3EC\uD568` });
+        for (const s of list2) if (text2.includes(s)) v.push({ contract: "forbidden_phrases", detail: `"${s}" \uD3EC\uD568` });
         break;
       case "must_start_with":
-        if (c.value && !text.startsWith(c.value)) v.push({ contract: "must_start_with", detail: `"${c.value}"\uB85C \uC2DC\uC791\uD558\uC9C0 \uC54A\uC74C` });
+        if (c.value && !text2.startsWith(c.value)) v.push({ contract: "must_start_with", detail: `"${c.value}"\uB85C \uC2DC\uC791\uD558\uC9C0 \uC54A\uC74C` });
         break;
       case "must_end_with":
-        if (c.value && !text.endsWith(c.value)) v.push({ contract: "must_end_with", detail: `"${c.value}"\uB85C \uB05D\uB098\uC9C0 \uC54A\uC74C` });
+        if (c.value && !text2.endsWith(c.value)) v.push({ contract: "must_end_with", detail: `"${c.value}"\uB85C \uB05D\uB098\uC9C0 \uC54A\uC74C` });
         break;
     }
   }
   return v;
 }
-function parseJsonLoose(text) {
-  const body = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
+function parseJsonLoose(text2) {
+  const body = text2.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
   try {
     return JSON.parse(body);
   } catch {
     return void 0;
   }
 }
-function detectLanguage(text) {
-  const hangul = (text.match(/[가-힣]/g) ?? []).length;
-  const latin = (text.match(/[A-Za-z]/g) ?? []).length;
+function detectLanguage(text2) {
+  const hangul = (text2.match(/[가-힣]/g) ?? []).length;
+  const latin = (text2.match(/[A-Za-z]/g) ?? []).length;
   if (hangul + latin < 20) return null;
   return hangul >= latin * 0.3 ? "ko" : "en";
 }
@@ -26691,8 +26691,8 @@ function runAttackDetectors(opts) {
   }
   return hits;
 }
-function stripQuoted(text) {
-  return text.replace(/```[\s\S]*?```/g, " ").replace(/`[^`\n]*`/g, " ").replace(/"[^"\n]*"|“[^”\n]*”|'[^'\n]*'|‘[^’\n]*’|「[^」\n]*」|『[^』\n]*』/g, " ");
+function stripQuoted(text2) {
+  return text2.replace(/```[\s\S]*?```/g, " ").replace(/`[^`\n]*`/g, " ").replace(/"[^"\n]*"|“[^”\n]*”|'[^'\n]*'|‘[^’\n]*’|「[^」\n]*」|『[^』\n]*』/g, " ");
 }
 function withoutOutputFormat(md) {
   return md.replace(/```[\s\S]*?```/g, "\n").split("\n").filter((line) => !/^\s*[{}\[\]]/.test(line) && !/"[^"\n]+"\s*:/.test(line)).join("\n");
@@ -26720,7 +26720,7 @@ function renderAttack(attack, rng) {
   for (const [slot, values] of Object.entries(attack.slots ?? {})) {
     if (values.length > 0) chosen[slot] = pick2(values);
   }
-  const fill = (text) => text.replace(SLOT, (whole, slot) => {
+  const fill = (text2) => text2.replace(SLOT, (whole, slot) => {
     if (!(slot in chosen)) throw new Error(`${attack.id}: \uBE48\uCE78 {${slot}}\uC758 \uAC12 \uBAA9\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4`);
     return chosen[slot];
   });
@@ -26751,7 +26751,7 @@ function groundContracts(contracts, md) {
   const doc = normalizeQuote(md);
   const kept = [];
   const dropped = [];
-  const drop = (contract, reason) => dropped.push({ contract, reason });
+  const drop = (contract2, reason) => dropped.push({ contract: contract2, reason });
   const hasJson = contracts.some((c) => c.type === "json_output");
   for (const c of contracts) {
     const evidence = normalizeQuote(c.evidence ?? "");
@@ -27251,7 +27251,7 @@ async function evaluateRound1(ctx, doc, tasks, responses, contractViolations) {
   const r1Ids = [...new Set([...allowedR1.values()].flatMap((ids) => [...ids]))];
   const ask = (nonce, only) => {
     const iv = itemVote(only, "round_evaluation");
-    const blocks = Object.entries(responses).map(([label, text]) => wrap("response", nonce, text, label)).join("\n\n");
+    const blocks = Object.entries(responses).map(([label, text2]) => wrap("response", nonce, text2, label)).join("\n\n");
     return askInterviewer(
       ctx,
       "interviewer_round1_practical.md",
@@ -27704,11 +27704,16 @@ import { join as join2 } from "node:path";
 
 // core/engine.ts
 init_sdk();
+
+// core/models.ts
 var MODEL_IDS = {
   haiku: "claude-haiku-5-5",
   sonnet: "claude-sonnet-5-5",
   opus: "claude-opus-5-5"
 };
+var MODEL_ID = /^claude-[a-z0-9-]{1,50}$/;
+
+// core/engine.ts
 var PRICES = {
   "claude-haiku-5-5": { input: 0.1, output: 0.5, cacheRead: 0.01, long: { input: 0.5, output: 2.5, cacheRead: 0.05 } },
   "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.1 },
@@ -27723,7 +27728,6 @@ function costUsd(model, u) {
   const p = base.long && u.input_tokens + write + read > 1e5 ? base.long : base;
   return (u.input_tokens * p.input + write * p.input * 1.25 + read * p.cacheRead + u.output_tokens * p.output) / 1e6;
 }
-var MODEL_ID = /^claude-[a-z0-9-]{1,50}$/;
 function createApiLlm(opts) {
   const client = new Anthropic({ apiKey: opts.apiKey });
   return { backend: "api", converse: (req) => converseApi(client, req) };
@@ -27754,9 +27758,9 @@ async function converseApi(client, req) {
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default"
     }) : long ? await client.messages.stream(params).finalMessage() : await client.messages.create(params);
-    const text = response.content.flatMap((b) => b.type === "text" ? [b.text] : []).join("");
+    const text2 = response.content.flatMap((b) => b.type === "text" ? [b.text] : []).join("");
     const refused = response.stop_reason === "refusal";
-    turns.push({ text, refused, stopReason: response.stop_reason ?? void 0, json: isLast && req.schema && !refused ? safeParse(text) : void 0 });
+    turns.push({ text: text2, refused, stopReason: response.stop_reason ?? void 0, json: isLast && req.schema && !refused ? safeParse(text2) : void 0 });
     const u = response.usage;
     usage.inputTokens += u.input_tokens + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
     usage.cacheReadTokens += u.cache_read_input_tokens ?? 0;
@@ -27768,8 +27772,8 @@ async function converseApi(client, req) {
   }
   return { turns, usage, modelIds: [...modelIds] };
 }
-function safeParse(text) {
-  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
+function safeParse(text2) {
+  const trimmed = text2.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
   try {
     return JSON.parse(trimmed);
   } catch {
@@ -27813,11 +27817,11 @@ async function converseCli(req) {
     if (req.userTurns.length === 1) args.push("--no-session-persistence");
     const out2 = await runClaude(args, userTurn);
     sessionId = out2.session_id;
-    const text = typeof out2.result === "string" ? out2.result : "";
+    const text2 = typeof out2.result === "string" ? out2.result : "";
     turns.push({
-      text,
+      text: text2,
       refused: out2.stop_reason === "refusal",
-      json: isLast && req.schema ? out2.structured_output ?? safeParse(text) : void 0
+      json: isLast && req.schema ? out2.structured_output ?? safeParse(text2) : void 0
     });
     const u = out2.usage ?? {};
     usage.inputTokens += (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
@@ -27908,10 +27912,10 @@ function fsExamStore(dir = DEFAULT_DIR) {
       const f = file(quarter, hash);
       return existsSync(f) ? JSON.parse(readFileSync(f, "utf8")) : void 0;
     },
-    save: async (record) => {
-      const f = file(record.quarter, record.mdHash);
+    save: async (record2) => {
+      const f = file(record2.quarter, record2.mdHash);
       mkdirSync(join3(f, ".."), { recursive: true });
-      writeFileSync(f, JSON.stringify(record, null, 2));
+      writeFileSync(f, JSON.stringify(record2, null, 2));
     }
   };
 }
@@ -27921,7 +27925,8 @@ import { createHash as createHash2 } from "node:crypto";
 import { basename, join as join4 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 import { gunzipSync, gzipSync } from "node:zlib";
-var SUBMISSION_SCHEMA = 1;
+var SUBMISSION_SCHEMA = 2;
+var LEGACY_SCHEMA = 1;
 var BODY_MARKER_START = "<!-- arena-submission:start -->";
 var BODY_MARKER_END = "<!-- arena-submission:end -->";
 var MAX_PAYLOAD_CHARS = 6e4;
@@ -27934,16 +27939,31 @@ function promptsHash() {
   }
   return h.digest("hex").slice(0, 16);
 }
+function candidateModelId(reports) {
+  const ids = [...new Set(reports.flatMap((r) => r.models?.candidate ?? []))].filter((id) => MODEL_ID.test(id));
+  return ids.length === 1 ? ids[0] : void 0;
+}
+var QUARTER = /^\d{4}-Q[1-4]$/;
+function evidenceComplete(st, quarter) {
+  if (!quarter || !QUARTER.test(quarter)) return false;
+  if (st.final && (!st.final.canary || st.final.attacks.some((a) => !a.runs?.length))) return false;
+  return true;
+}
 function agentName(path4) {
   return basename(path4).replace(/[^A-Za-z0-9._-]/g, "_").replace(/_+/g, "_").slice(0, 100) || "agent.md";
 }
-function buildSubmission(s, arenaVersion) {
+function buildSubmission(s, arenaVersion, opts = {}) {
   const st = s.stages;
   const reached = st.final ? "final" : st.r2 ? "r2" : st.r1 ? "r1" : st.doc ? "doc" : "security";
   const last = s.reports[s.reports.length - 1];
+  const quarter = st.final?.quarter ?? s.reports.map((r) => r.config.exam).find((q) => !!q && QUARTER.test(q));
+  const full = opts.withEvidence !== false && evidenceComplete(st, quarter);
+  const engineModelId = candidateModelId(s.reports);
+  const slim = (vs) => full ? vs.map((v) => ({ ...v, reason: "" })) : vs;
+  const mocks = (ms) => (ms ?? []).map((m) => ({ tool: m.tool, when: m.when, returns: m.returns }));
   return {
     // 면접을 시작할 때 기록한 프롬프트 지문을 쓴다. 그 사이 스킬을 업데이트했어도 실제로 채점한 프롬프트 버전이 남는다
-    schema: SUBMISSION_SCHEMA,
+    schema: full ? SUBMISSION_SCHEMA : LEGACY_SCHEMA,
     arenaVersion,
     promptsHash: s.promptsHash ?? promptsHash(),
     createdAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -27952,18 +27972,53 @@ function buildSubmission(s, arenaVersion) {
     md: s.md,
     mdHash: s.mdHash,
     options: s.options,
-    run: { engine: last.config.engine, interviewer: last.config.interviewer, generator: last.config.generator, backend: last.backend },
+    run: { engine: last.config.engine, interviewer: last.config.interviewer, generator: last.config.generator, backend: last.backend, ...engineModelId ? { engineModelId } : {} },
     reached,
     hired: !!st.final?.passed,
+    ...full ? { quarter } : {},
+    ...opts.repeat ? { repeat: opts.repeat } : {},
     stages: {
       security: { passed: !!st.security?.passed, rule: st.security?.securityBan?.rule },
-      doc: st.doc && { passed: st.doc.passed, score: st.doc.score, verdicts: st.doc.output.verdicts, banned: st.doc.securityBan?.rule },
-      r1: st.r1 && { passed: st.r1.passed, score: st.r1.score, verdicts: st.r1.output.verdicts, violationCount: countViolations(st.r1.contractViolations), banned: st.r1.securityBan?.rule },
-      r2: st.r2 && { passed: st.r2.passed, score: st.r2.score, verdicts: st.r2.output.verdicts, scenarioIds: st.r2.scenarios.map((x) => x.id), runKeys: Object.keys(st.r2.transcripts).sort(), banned: st.r2.securityBan?.rule },
+      doc: st.doc && {
+        passed: st.doc.passed,
+        score: st.doc.score,
+        verdicts: slim(st.doc.output.verdicts),
+        banned: st.doc.securityBan?.rule,
+        ...full ? { evidence: { hasTools: !!st.doc.output.job_profile?.has_tools, contracts: st.doc.output.verifiable_contracts ?? [] } } : {}
+      },
+      r1: st.r1 && {
+        passed: st.r1.passed,
+        score: st.r1.score,
+        verdicts: slim(st.r1.output.verdicts),
+        violationCount: countViolations(st.r1.contractViolations),
+        banned: st.r1.securityBan?.rule,
+        ...full ? { evidence: {
+          tasks: st.r1.tasks.map((t) => ({ id: t.id, user_message: t.user_message, success_criteria: t.success_criteria ?? [], tool_mocks: mocks(t.tool_mocks) })),
+          responses: st.r1.responses
+        } } : {}
+      },
+      r2: st.r2 && {
+        passed: st.r2.passed,
+        score: st.r2.score,
+        verdicts: slim(st.r2.output.verdicts),
+        scenarioIds: st.r2.scenarios.map((x) => x.id),
+        runKeys: Object.keys(st.r2.transcripts).sort(),
+        banned: st.r2.securityBan?.rule,
+        ...full ? { evidence: {
+          scenarios: st.r2.scenarios.map((x) => ({ id: x.id, type: x.type, turn1_message: x.turn1_message, turn2_pressure: x.turn2_pressure, tool_mocks: mocks(x.tool_mocks) })),
+          transcripts: st.r2.transcripts
+        } } : {}
+      },
       final: st.final && {
         passed: st.final.passed,
         banned: st.final.securityBan?.rule,
-        attacks: st.final.attacks.map((a) => ({ category: a.category, defended: a.defended, decided_by: a.decided_by }))
+        ...full ? { canary: st.final.canary } : {},
+        attacks: st.final.attacks.map((a) => ({
+          category: a.category,
+          defended: a.defended,
+          decided_by: a.decided_by,
+          ...full ? { attack_id: a.attack_id, runs: a.runs.map((r) => ({ run: r.run, response: r.response, defended: r.defended, decided_by: r.decided_by, evidence: r.evidence })) } : {}
+        }))
       }
     }
   };
@@ -28024,6 +28079,25 @@ var verdict = (v) => {
   return out2;
 };
 var verdicts = (v) => list(v, 200, verdict);
+var MAX_TEXT = 2e5;
+var text = (v, max = MAX_TEXT) => str(v, max);
+var toolMocks = (v) => list(v ?? [], 30, (m) => {
+  const o = obj(m);
+  return { tool: text(o.tool, 400), when: text(o.when, 2e3), returns: text(o.returns) };
+});
+var record = (v, maxKeys, value) => {
+  const o = obj(v);
+  const keys = Object.keys(o);
+  if (keys.length > maxKeys) throw new Invalid();
+  const out2 = /* @__PURE__ */ Object.create(null);
+  for (const k of keys) out2[str(k, 40, TOKEN)] = value(o[k]);
+  return { ...out2 };
+};
+var contract = (v) => {
+  const o = obj(v);
+  return { type: str(o.type, 40, TOKEN), value: text(o.value, 4e3), evidence: text(o.evidence, 4e3) };
+};
+var CANARY = /^CANARY-[0-9a-f]{16}$/;
 function withBan(stage, raw) {
   const banned = optToken(raw.banned, 40);
   if (banned !== void 0) stage.banned = banned;
@@ -28063,23 +28137,54 @@ function canonicalSubmission(raw) {
       hired: bool(o.hired),
       stages: { security: { passed: bool(security.passed) } }
     };
+    if (run.engineModelId !== void 0 && run.engineModelId !== null) sub.run.engineModelId = str(run.engineModelId, 60, MODEL_ID);
+    if (o.quarter !== void 0 && o.quarter !== null) sub.quarter = str(o.quarter, 10, QUARTER);
+    if (o.repeat !== void 0 && o.repeat !== null) {
+      const r = obj(o.repeat);
+      sub.repeat = { runs: int(r.runs, 1, 100), passes: int(r.passes, 0, 100) };
+      if (sub.repeat.passes > sub.repeat.runs) throw new Invalid();
+    }
     const rule = optToken(security.rule, 40);
     if (rule !== void 0) sub.stages.security.rule = rule;
     if (st.doc !== void 0) {
       const d = obj(st.doc);
       sub.stages.doc = { passed: bool(d.passed), score: int(d.score, -1e3, 1e3), verdicts: verdicts(d.verdicts) };
       withBan(sub.stages.doc, d);
+      if (d.evidence !== void 0 && d.evidence !== null) {
+        const e = obj(d.evidence);
+        sub.stages.doc.evidence = { hasTools: bool(e.hasTools), contracts: list(e.contracts, 40, contract) };
+      }
     }
     if (st.r1 !== void 0) {
       const d = obj(st.r1);
       sub.stages.r1 = { passed: bool(d.passed), score: int(d.score, -1e3, 1e3), verdicts: verdicts(d.verdicts), violationCount: int(d.violationCount, 0, 1e3) };
       withBan(sub.stages.r1, d);
+      if (d.evidence !== void 0 && d.evidence !== null) {
+        const e = obj(d.evidence);
+        sub.stages.r1.evidence = {
+          tasks: list(e.tasks, 3, (t) => {
+            const x = obj(t);
+            return { id: oneOf(x.id, R1_TASKS), user_message: text(x.user_message), success_criteria: list(x.success_criteria, 20, (c) => text(c, 4e3)), tool_mocks: toolMocks(x.tool_mocks) };
+          }),
+          responses: record(e.responses, 8, (r) => text(r))
+        };
+      }
     }
     if (st.r2 !== void 0) {
       const d = obj(st.r2);
       sub.stages.r2 = { passed: bool(d.passed), score: int(d.score, -1e3, 1e3), verdicts: verdicts(d.verdicts), scenarioIds: list(d.scenarioIds, 20, (x) => str(x, 40, TOKEN)) };
       if (d.runKeys !== void 0) sub.stages.r2.runKeys = list(d.runKeys, 40, (x) => str(x, 40, TOKEN));
       withBan(sub.stages.r2, d);
+      if (d.evidence !== void 0 && d.evidence !== null) {
+        const e = obj(d.evidence);
+        sub.stages.r2.evidence = {
+          scenarios: list(e.scenarios, 3, (t) => {
+            const x = obj(t);
+            return { id: oneOf(x.id, R2_SCENARIOS), type: str(x.type, 60, TOKEN), turn1_message: text(x.turn1_message), turn2_pressure: text(x.turn2_pressure), tool_mocks: toolMocks(x.tool_mocks) };
+          }),
+          transcripts: record(e.transcripts, 12, (turns) => list(turns, 4, (t) => text(t)))
+        };
+      }
     }
     if (st.final !== void 0) {
       const d = obj(st.final);
@@ -28087,10 +28192,29 @@ function canonicalSubmission(raw) {
         passed: bool(d.passed),
         attacks: list(d.attacks, 10, (a) => {
           const x = obj(a);
-          return { category: str(x.category, 40, TOKEN), defended: bool(x.defended), decided_by: oneOf(x.decided_by, DECIDERS) };
+          const out2 = {
+            category: str(x.category, 40, TOKEN),
+            defended: bool(x.defended),
+            decided_by: oneOf(x.decided_by, DECIDERS)
+          };
+          if (x.attack_id !== void 0 && x.attack_id !== null) out2.attack_id = str(x.attack_id, 40, TOKEN);
+          if (x.runs !== void 0 && x.runs !== null) {
+            out2.runs = list(x.runs, 4, (r) => {
+              const y = obj(r);
+              return {
+                run: str(y.run, 10, TOKEN),
+                response: text(y.response),
+                defended: bool(y.defended),
+                decided_by: oneOf(y.decided_by, DECIDERS),
+                evidence: y.evidence === null || y.evidence === void 0 ? null : text(y.evidence, 4e3)
+              };
+            });
+          }
+          return out2;
         })
       };
       withBan(sub.stages.final, d);
+      if (d.canary !== void 0 && d.canary !== null) sub.stages.final.canary = str(d.canary, 40, CANARY);
     }
     return sub;
   } catch {
@@ -28133,7 +28257,7 @@ function docShape(vs, target) {
 }
 function verifySubmission(sub, acceptedPromptHashes) {
   const p = [];
-  if (sub?.schema !== SUBMISSION_SCHEMA) return ["Unknown submission format"];
+  if (sub?.schema !== SUBMISSION_SCHEMA && sub?.schema !== LEGACY_SCHEMA) return ["Unknown submission format"];
   if (typeof sub.md !== "string" || sub.md.length === 0) return ["The agent spec is missing"];
   if (sub.md.replace(/\s/g, "").length < MIN_MD_CHARS) p.push(`The agent spec is shorter than ${MIN_MD_CHARS} characters`);
   if (Buffer.byteLength(sub.md) > 64 * 1024) p.push("The agent spec is larger than 64 KB");
@@ -28142,6 +28266,10 @@ function verifySubmission(sub, acceptedPromptHashes) {
   if (sub.options?.mode !== "ranked") p.push("Practice (quick) mode results cannot be submitted");
   if (!["light", "middle", "open"].includes(sub.options?.division)) p.push("Unknown division");
   else if (sub.run?.engine !== DIVISION_ENGINE[sub.options.division]) p.push("The candidate model does not match the division");
+  else if (sub.run.engineModelId !== void 0) {
+    const want = MODEL_IDS[sub.run.engine];
+    if (sub.run.engineModelId !== want && !sub.run.engineModelId.startsWith(`${want}-`)) p.push(`The candidate ran on ${sub.run.engineModelId}, not on the division's model (${want})`);
+  }
   if (!STAGE_ORDER.includes(sub.reached)) p.push("Unknown reached stage");
   const gate = runSecurityGate(sub.md);
   if (gate.verdict === "BANNED" || !sub.stages.security.passed) p.push(`The spec does not pass the security checkpoint${gate.verdict === "BANNED" ? ` (rule ${gate.rule})` : ""}; such results are not listed`);
@@ -28183,6 +28311,7 @@ function verifySubmission(sub, acceptedPromptHashes) {
       if (!early) p.push(...verdictShape("Round 2", r2.verdicts, r2Shape(r2.scenarioIds)));
     }
   }
+  if (sub.schema === SUBMISSION_SCHEMA) p.push(...recheckEvidence(sub));
   if (final) {
     const sel = attackSelection ??= JSON.parse(ASSETS["prompts/red_team_attack_pool.json"]).selection;
     const cats = final.attacks.map((a) => a.category);
@@ -28197,9 +28326,122 @@ function verifySubmission(sub, acceptedPromptHashes) {
   if (sub.hired !== !!final?.passed) p.push("The hired flag does not match the final result");
   return p;
 }
+var sameSet = (a, b) => a.length === b.length && [...a].sort().join("\0") === [...b].sort().join("\0");
+function previousQuarter(q) {
+  const [year, n] = [Number(q.slice(0, 4)), Number(q.slice(6))];
+  return n === 1 ? `${year - 1}-Q4` : `${year}-Q${n - 1}`;
+}
+function recheckEvidence(sub) {
+  const p = [];
+  const { doc, r1, r2, final } = sub.stages;
+  const missing = (name) => `The ${name} transcripts are missing. Update the skill and re-run the interview.`;
+  if (doc && !doc.evidence) return [missing("document screening")];
+  const contracts = doc?.evidence?.contracts ?? [];
+  if (doc?.evidence && groundContracts(contracts, sub.md).dropped.length > 0) p.push("An output contract is not stated in the spec");
+  let t2Message;
+  if (r1) {
+    if (!r1.evidence) return [...p, missing("round 1")];
+    const { tasks, responses } = r1.evidence;
+    if (stoppedEarly(r1) && tasks.length === 0 && Object.keys(responses).length === 0) {
+    } else if (!validTasks(tasks)) p.push("Round 1 does not have the three tasks T1 ~ T3");
+    else if (!sameSet(Object.keys(responses), ["T1-a", "T1-b", "T2", "T3"])) p.push("Round 1 does not have the four responses T1-a, T1-b, T2, T3");
+    else {
+      t2Message = tasks.find((t) => t.id === "T2")?.user_message;
+      const sources = [sub.md, ...Object.values(responses), ...tasks.flatMap((t) => [t.user_message, ...t.success_criteria, ...t.tool_mocks.map((m) => m.returns)])];
+      if (excludeUnverified(r1.verdicts.filter((v) => !v.excluded), sources).excluded > 0) p.push("Round 1 evidence quotes are not in the responses");
+      const violations = Object.fromEntries(Object.entries(responses).map(([label, text2]) => {
+        const id = label.split("-")[0];
+        return [label, checkContracts(text2, contractsForTask(id, contracts)).map((v) => `${v.contract}: ${v.detail}`)];
+      }));
+      if (countViolations(violations) !== r1.violationCount) p.push("Round 1 contract violations do not match the responses");
+    }
+  }
+  if (r2) {
+    if (!r2.evidence) return [...p, missing("round 2")];
+    const { scenarios, transcripts } = r2.evidence;
+    const keys = Object.keys(transcripts);
+    if (stoppedEarly(r2) && scenarios.length === 0 && keys.length === 0) {
+    } else if (!validScenarios(scenarios)) p.push("Round 2 does not have the three scenarios S1 ~ S3");
+    else if (!sameSet(keys, r2.runKeys ?? []) || !sameSet(keys, scenarios.flatMap((x) => R2_RUN_LABELS.map((l) => `${x.id}-${l}`)))) p.push("Round 2 transcripts do not match the runs");
+    else if (Object.values(transcripts).some((turns) => turns.length !== 2)) p.push("A round 2 transcript does not have two turns");
+    else {
+      const sources = [sub.md, ...scenarios.flatMap((x) => [x.turn1_message, x.turn2_pressure, ...x.tool_mocks.map((m) => m.returns)]), ...Object.values(transcripts).flat()];
+      if (excludeUnverified(r2.verdicts.filter((v) => !v.excluded), sources).excluded > 0) p.push("Round 2 evidence quotes are not in the responses");
+      const violated = keys.filter((k) => transcripts[k].some((t) => checkContracts(t, contracts).length > 0));
+      if (!stoppedEarly(r2) && violated.some((k) => r2.verdicts.find((v) => v.target === k && v.id === "R2-5")?.result !== "false")) p.push("Round 2 contract violations do not match the responses");
+    }
+  }
+  if (final) {
+    if (!sub.quarter || !final.canary || final.attacks.some((a) => !a.attack_id || !a.runs)) return [...p, missing("final")];
+    const now = quarterOf(new Date(sub.createdAt));
+    if (sub.quarter !== now && sub.quarter !== previousQuarter(now)) p.push("The final was run in an older quarter; re-run the interview");
+    if (t2Message === void 0) return [...p, "The final has no round 1 task to rebuild the attacks from"];
+    const quarter = sub.quarter;
+    const lineup = buildLineup({
+      taskLanguage: documentLanguage(sub.md),
+      hasTools: doc.evidence.hasTools,
+      attackSeed: attackSeedOf(quarter),
+      variantSeed: (id) => variantSeedOf(quarter, id),
+      t2Message
+    });
+    const same = final.attacks.length === lineup.attacks.length && final.attacks.every((a, i) => a.attack_id === lineup.attacks[i].id && a.category === lineup.attacks[i].category);
+    if (!same) return [...p, "The final attacks are not this quarter's line-up"];
+    final.attacks.forEach((a, i) => {
+      const runs = a.runs;
+      if (!sameSet(runs.map((r) => r.run), FINAL_RUN_LABELS)) return void p.push(`Attack ${i + 1} was not run twice, as ranked mode requires`);
+      for (const r of runs) {
+        const hit = detectAttack(lineup.attacks[i], r.response, final.canary, sub.md, contracts).length > 0;
+        if (hit && (r.defended || r.decided_by !== "detector")) p.push(`Attack ${i + 1} run ${r.run}: the code detector finds a breach in the response`);
+        if (!hit && r.decided_by !== "interviewer") p.push(`Attack ${i + 1} run ${r.run}: marked as decided by the detector, but the detector finds nothing`);
+        if (r.evidence && ![r.response, lineup.messages[i], sub.md].some((src) => normalizeQuote(src).includes(normalizeQuote(r.evidence)))) {
+          p.push(`Attack ${i + 1} run ${r.run}: the evidence quote is not in the response`);
+        }
+      }
+      if (a.defended !== runs.every((r) => r.defended)) p.push(`Attack ${i + 1}: the result does not match its runs`);
+    });
+  }
+  return [...new Set(p)];
+}
 var ROOT = fileURLToPath2(new URL("..", import.meta.url));
 var DOCS = join4(ROOT, "docs");
 var SUBS = join4(DOCS, "submissions");
+
+// runner/repeat.ts
+var MAX_REPEAT = 10;
+function repeatStats(s, all) {
+  const group = s.group ?? s.session;
+  const same = (o) => (o.group ?? o.session) === group && o.mdHash === s.mdHash && o.promptsHash === s.promptsHash && o.options.mode === s.options.mode && o.options.division === s.options.division && o.options.target === s.options.target;
+  const members = all.filter(same);
+  if (members.length <= 1 && !s.repeatTarget) return null;
+  const finished = members.filter((m) => nextChallenge(m.stages) === null);
+  const stages = {};
+  const attacks = /* @__PURE__ */ new Map();
+  for (const m of finished) {
+    for (const name of ["doc", "r1", "r2", "final"]) {
+      const st = m.stages[name];
+      if (!st) continue;
+      const row = stages[name] ??= { seen: 0, passed: 0 };
+      row.seen++;
+      if (st.passed) row.passed++;
+    }
+    for (const a of m.stages.final?.attacks ?? []) {
+      const row = attacks.get(a.category) ?? { held: 0, runs: 0 };
+      row.runs += a.runs?.length ?? 1;
+      row.held += a.runs ? a.runs.filter((r) => r.defended).length : Number(a.defended);
+      attacks.set(a.category, row);
+    }
+  }
+  const target = s.repeatTarget ?? null;
+  return {
+    group,
+    target,
+    runs: finished.length,
+    passes: finished.filter((m) => !!m.stages.final?.passed).length,
+    remaining: target === null ? null : Math.max(0, target - members.length),
+    stages,
+    attacks: [...attacks].map(([category, v]) => ({ category, ...v }))
+  };
+}
 
 // runner/summary.ts
 var EN_LABELS = {
@@ -28372,6 +28614,16 @@ var HOME = process.env.ARENA_HOME ?? join5(homedir(), ".agent-interview-arena");
 var SESSIONS = join5(HOME, "sessions");
 var LIVE = join5(HOME, "live.jsonl");
 var MAX_MD_BYTES2 = 64 * 1024;
+function loadAllStates() {
+  if (!existsSync2(SESSIONS)) return [];
+  return readdirSync(SESSIONS).filter((d) => existsSync2(statePath(d))).flatMap((d) => {
+    try {
+      return [JSON.parse(readFileSync2(statePath(d), "utf8"))];
+    } catch {
+      return [];
+    }
+  });
+}
 function out(value) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}
 `);
@@ -28420,7 +28672,8 @@ async function runStage(s, challenge) {
     division: s.options.division,
     interviewer: "haiku",
     generator: "sonnet",
-    screenAll: false,
+    // 랭크전은 순위표에 오를 수 있으므로 정규식에 안 걸린 명세도 분류 모델이 전수로 본다 (연습은 10% 표본)
+    screenAll: s.options.mode === "ranked",
     outputLanguage: s.options.lang,
     quick: s.options.mode === "quick",
     log: (msg) => {
@@ -28447,18 +28700,19 @@ async function runStage(s, challenge) {
   if (!nextChallenge(s.stages)) emit({ event: "session_end", session: s.session, agent: s.agent, result: report.result, hired: challenge === "final" && summary.passed });
   return summary;
 }
-function localProblems(s) {
+function localProblems(s, withEvidence = true) {
   if (!s.promptsHash) return ["This interview was started by an older version of the skill. Re-run the interview to submit."];
   try {
-    const canon = canonicalSubmission(JSON.parse(JSON.stringify(buildSubmission(s, ARENA_VERSION))));
+    const canon = canonicalSubmission(JSON.parse(JSON.stringify(buildSubmission(s, ARENA_VERSION, { withEvidence }))));
     return canon ? verifySubmission(canon, [canon.promptsHash]) : ["The submission is not in the expected format"];
   } catch {
     return ["This session's record cannot be checked (old or damaged format). Re-run the interview to submit."];
   }
 }
 var promptsChanged = (s) => !!s.promptsHash && s.promptsHash !== promptsHash();
-function sessionOverview(s) {
+function sessionOverview(s, all = loadAllStates()) {
   const next = nextChallenge(s.stages);
+  const repeat = repeatStats(s, [...all.filter((o) => o.session !== s.session), s]);
   const submitProblems = next !== null || s.options.mode !== "ranked" ? null : promptsChanged(s) ? ["The skill was updated after this interview started; re-run the interview"] : localProblems(s);
   return {
     session: s.session,
@@ -28477,6 +28731,8 @@ function sessionOverview(s) {
     // 끝난 랭크전 중 순위표 검사를 통과할 결과만 (검문소 실격 등은 봇이 받지 않는다). 못 내는 이유는 submitProblems 에
     submittable: submitProblems !== null && submitProblems.length === 0,
     submitProblems,
+    // 재면접 묶음의 합격률 (한 판만 봤고 --repeat 도 없으면 null)
+    repeat,
     resultFile: statePath(s.session)
   };
 }
@@ -28492,7 +28748,9 @@ async function main() {
       lang: { type: "string", default: "en" },
       mode: { type: "string", default: "ranked" },
       target: { type: "string", default: "claude" },
-      division: { type: "string" }
+      division: { type: "string" },
+      repeat: { type: "string" },
+      unverified: { type: "boolean", default: false }
     }
   });
   if (command === "start") {
@@ -28504,6 +28762,11 @@ async function main() {
     if (!TARGETS.includes(values.target)) fail("bad_target", `\uC54C \uC218 \uC5C6\uB294 target: ${values.target}`);
     if (values.division !== void 0 && !DIVISIONS.includes(values.division)) fail("bad_division", `\uC54C \uC218 \uC5C6\uB294 division: ${values.division}`);
     const picked = pickDivision(md, values.division);
+    let repeatTarget;
+    if (values.repeat !== void 0) {
+      repeatTarget = Number(values.repeat);
+      if (!Number.isInteger(repeatTarget) || repeatTarget < 2 || repeatTarget > MAX_REPEAT) fail("bad_repeat", `--repeat \uB294 2 ~ ${MAX_REPEAT} \uC0AC\uC774\uC758 \uC815\uC218\uC785\uB2C8\uB2E4: ${values.repeat}`);
+    }
     const s = {
       version: ARENA_VERSION,
       session: `${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}-${randomBytes2(4).toString("hex")}`,
@@ -28517,7 +28780,8 @@ async function main() {
       reports: [],
       divisionSource: picked.source,
       specModel: picked.specModel,
-      promptsHash: promptsHash()
+      promptsHash: promptsHash(),
+      ...repeatTarget ? { repeatTarget } : {}
     };
     saveState(s);
     try {
@@ -28543,13 +28807,48 @@ async function main() {
     out({ ...sessionOverview(s), stage });
     return;
   }
+  if (command === "again") {
+    const prev = loadState(positionals[0] ?? "");
+    if (mdChanged(prev)) fail("md_changed", "\uBA74\uC811\uC744 \uBCF8 \uB4A4 \uC5D0\uC774\uC804\uD2B8 \uD30C\uC77C\uC774 \uBC14\uB00C\uC5C8\uC2B5\uB2C8\uB2E4. \uACE0\uCE5C \uD30C\uC77C\uB85C \uC0C8 \uBA74\uC811\uC744 \uC2DC\uC791\uD558\uC138\uC694.", { session: prev.session });
+    if (promptsChanged(prev)) fail("prompts_changed", "\uBA74\uC811\uC744 \uBCF8 \uB4A4 \uC2A4\uD0AC\uC774 \uC5C5\uB370\uC774\uD2B8\uB418\uC5B4 \uBA74\uC811\uAD00 \uD504\uB86C\uD504\uD2B8\uAC00 \uBC14\uB00C\uC5C8\uC2B5\uB2C8\uB2E4. \uC0C8 \uBA74\uC811\uC744 \uC2DC\uC791\uD558\uC138\uC694.", { session: prev.session });
+    const group = prev.group ?? prev.session;
+    const members = loadAllStates().filter((o) => (o.group ?? o.session) === group);
+    if (members.some((m) => nextChallenge(m.stages) !== null)) fail("not_finished", "\uC774 \uBB36\uC74C\uC5D0 \uC544\uC9C1 \uB05D\uB098\uC9C0 \uC54A\uC740 \uBA74\uC811\uC774 \uC788\uC2B5\uB2C8\uB2E4. \uBA3C\uC800 \uB05D\uAE4C\uC9C0 \uBCF4\uC138\uC694.", { session: prev.session });
+    if (members.length >= MAX_REPEAT) fail("repeat_limit", `\uD55C \uBB36\uC74C\uC740 ${MAX_REPEAT}\uD310\uAE4C\uC9C0\uC785\uB2C8\uB2E4.`, { session: prev.session });
+    if (!prev.group) {
+      prev.group = group;
+      saveState(prev);
+    }
+    const s = {
+      version: ARENA_VERSION,
+      session: `${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}-${randomBytes2(4).toString("hex")}`,
+      agent: prev.agent,
+      mdPath: prev.mdPath,
+      mdHash: prev.mdHash,
+      md: prev.md,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      options: prev.options,
+      stages: {},
+      reports: [],
+      divisionSource: prev.divisionSource,
+      specModel: prev.specModel,
+      promptsHash: prev.promptsHash,
+      group,
+      ...prev.repeatTarget ? { repeatTarget: prev.repeatTarget } : {}
+    };
+    saveState(s);
+    const stage = await runStage(s, "doc");
+    out({ ...sessionOverview(s), stage });
+    return;
+  }
   if (command === "status") {
     const s = loadState(positionals[0] ?? "");
     out({ ...sessionOverview(s), stages: s.reports.map((r) => summarizeStage(r.challenge, r, s.stages)) });
     return;
   }
   if (command === "list") {
-    const items = existsSync2(SESSIONS) ? readdirSync(SESSIONS).filter((d) => existsSync2(statePath(d))).map((d) => JSON.parse(readFileSync2(statePath(d), "utf8"))).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 20).map(sessionOverview) : [];
+    const all = loadAllStates();
+    const items = [...all].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 20).map((x) => sessionOverview(x, all));
     out({ sessions: items });
     return;
   }
@@ -28563,17 +28862,22 @@ async function main() {
     if (promptsChanged(s)) {
       fail("prompts_changed", "\uBA74\uC811\uC744 \uBCF8 \uB4A4 \uC2A4\uD0AC\uC774 \uC5C5\uB370\uC774\uD2B8\uB418\uC5B4 \uBA74\uC811\uAD00 \uD504\uB86C\uD504\uD2B8\uAC00 \uBC14\uB00C\uC5C8\uC2B5\uB2C8\uB2E4. \uC21C\uC704\uD45C\uB294 \uC9C0\uAE08 \uBC84\uC804\uC758 \uACB0\uACFC\uB9CC \uBC1B\uC73C\uB2C8 \uC0C8\uB85C \uBA74\uC811\uC744 \uBCF4\uC138\uC694.");
     }
-    const problems = localProblems(s);
+    const withEvidence = !values.unverified;
+    const problems = localProblems(s, withEvidence);
     if (problems.length > 0) fail("not_verifiable", "\uC21C\uC704\uD45C \uAC80\uC99D\uC744 \uD1B5\uACFC\uD558\uC9C0 \uBABB\uD558\uB294 \uACB0\uACFC\uB77C \uC81C\uCD9C\uD558\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4.", { problems });
-    const sub = buildSubmission(s, ARENA_VERSION);
+    const stats = repeatStats(s, loadAllStates());
+    const sub = buildSubmission(s, ARENA_VERSION, { withEvidence, ...stats && stats.runs > 1 ? { repeat: { runs: stats.runs, passes: stats.passes } } : {} });
     const payload = encodeSubmission(sub);
-    if (payload.length > MAX_PAYLOAD_CHARS) fail("too_large", "\uC81C\uCD9C \uB370\uC774\uD130\uAC00 GitHub Issue \uD55C\uB3C4\uB97C \uB118\uC2B5\uB2C8\uB2E4. \uC5D0\uC774\uC804\uD2B8 \uBB38\uC11C\uB97C \uC904\uC5EC \uC8FC\uC138\uC694.");
+    if (payload.length > MAX_PAYLOAD_CHARS) {
+      fail("too_large", sub.schema === SUBMISSION_SCHEMA ? "\uC81C\uCD9C \uB370\uC774\uD130(\uBA85\uC138 + \uC9C0\uC6D0\uC790 \uC751\uB2F5 \uC6D0\uBB38)\uAC00 GitHub Issue \uD55C\uB3C4\uB97C \uB118\uC2B5\uB2C8\uB2E4. \uC751\uB2F5 \uC6D0\uBB38 \uC5C6\uC774 \uB0B4\uB824\uBA74 --unverified \uB97C \uBD99\uC774\uC138\uC694 (\uBBF8\uAC80\uC99D\uC73C\uB85C \uC624\uB985\uB2C8\uB2E4)." : "\uC81C\uCD9C \uB370\uC774\uD130\uAC00 GitHub Issue \uD55C\uB3C4\uB97C \uB118\uC2B5\uB2C8\uB2E4. \uC5D0\uC774\uC804\uD2B8 \uBB38\uC11C\uB97C \uC904\uC5EC \uC8FC\uC138\uC694.");
+    }
+    const rechecked = sub.schema === SUBMISSION_SCHEMA;
     const scores = [sub.stages.doc?.score, sub.stages.r1?.score, sub.stages.r2?.score].filter((x) => x !== void 0).join(" / ");
     const body = [
       `Agent **${sub.agent}** \xB7 division \`${sub.options.division}\` (${sub.run.engine}) \xB7 reached \`${sub.reached}\`${sub.hired ? " \xB7 \u{1F3C6} HIRED" : ""}`,
       `Scores: ${scores || "-"}`,
       "",
-      "This issue was generated by `arena submit`. The block below is the compressed submission (agent spec + verdicts). Do not edit it \u2014 the leaderboard bot verifies it as is.",
+      rechecked ? "This issue was generated by `arena submit`. The block below is the compressed submission (agent spec, tasks, the candidate's answers and verdicts). Do not edit it \u2014 the leaderboard bot re-checks it as is." : "This issue was generated by `arena submit`. The block below is the compressed submission (agent spec + verdicts, without the candidate's answers, so it is listed as unverified). Do not edit it \u2014 the leaderboard bot verifies it as is.",
       "",
       BODY_MARKER_START,
       "```",
@@ -28590,7 +28894,11 @@ async function main() {
       title: `[arena-submission] ${sub.agent} (${sub.options.division})`,
       bodyFile,
       newIssueUrl: `https://github.com/${BOARD_REPO}/issues/new?template=1-arena-submission.md`,
-      public: { agentSpec: true, githubLogin: true, scores: true },
+      // responses: 과제와 지원자 응답 원문이 Issue 본문에 실린다 (저장소 사본에는 남기지 않는다)
+      public: { agentSpec: true, githubLogin: true, scores: true, responses: rechecked },
+      // 순위표에 오르는 등급. unverified 는 응답 원문이 없어 대조하지 못한 기록이다
+      tier: rechecked ? "self-reported" : "unverified",
+      repeat: sub.repeat ?? null,
       reached: sub.reached,
       hired: sub.hired
     });
@@ -28613,7 +28921,7 @@ async function main() {
     out({ version: ARENA_VERSION });
     return;
   }
-  fail("usage", "\uC0AC\uC6A9\uBC95: arena <start|next|status|list|submit|config|version> ...");
+  fail("usage", "\uC0AC\uC6A9\uBC95: arena <start|next|again|status|list|submit|config|version> ...");
 }
 main().catch((e) => {
   emit({ event: "error", message: String(e?.message ?? e) });

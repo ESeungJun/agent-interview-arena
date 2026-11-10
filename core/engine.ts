@@ -7,14 +7,10 @@
 //         결과 파일에 이 한계가 기록된다.
 import Anthropic from "@anthropic-ai/sdk";
 
-export type Backend = "api" | "cli";
-export type ModelAlias = "haiku" | "sonnet" | "opus";
+import { MODEL_ID, MODEL_IDS, type ModelAlias } from "./models.ts";
 
-export const MODEL_IDS: Record<ModelAlias, string> = {
-  haiku: "claude-haiku-5-5",
-  sonnet: "claude-sonnet-5-5",
-  opus: "claude-opus-5-5",
-};
+export type Backend = "api" | "cli";
+export { MODEL_ID, MODEL_IDS, type ModelAlias };
 
 /**
  * 백만 토큰당 달러. 5분 캐시 쓰기는 입력의 1.25배다. 가격이 바뀌면 여기만 고친다.
@@ -58,9 +54,6 @@ export type ConverseResult = {
   /** 실제로 답한 모델 ID (백엔드가 알려 줄 때만). 서버 측 폴백이나 CLI 별칭 때문에 요청한 모델과 다를 수 있어 기록에 남긴다 */
   modelIds?: string[];
 };
-
-/** 기록에 남길 수 있는 모델 ID 모양. 순위표도 같은 모양만 받는다 */
-export const MODEL_ID = /^claude-[a-z0-9-]{1,50}$/;
 
 /** 면접 한 번에 쓰는 LLM 호출기. 백엔드 이름은 결과 보고서에 남긴다. */
 export type Llm = { backend: Backend; converse(req: ConverseRequest): Promise<ConverseResult> };

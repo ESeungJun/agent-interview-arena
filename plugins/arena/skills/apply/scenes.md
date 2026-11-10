@@ -317,3 +317,26 @@ For a final failure, write the defended count instead of a score ("방어 2/5, 5
 Then one card, icon ⚠️, title `{decisive}`, with the decisive mistake of the round it failed in (for the final, `mostDangerous`).
 
 Then the request prompt under `🤖 **{askall}**` (see Request prompt). Do not list the document screening feedback again: it is already in that prompt.
+
+## Repeat summary
+
+Shown once, after the last run of a `--repeat` group, from the `repeat` object. It tells the user how often this spec gets through the same exam.
+
+```text
+┌─ 🔁 {repeat}
+│
+│  🏆 {hiredIn}  {passes}/{runs}
+│
+│  📄 {doc}    {stages.doc.passed}/{stages.doc.seen}
+│  💼 {r1}     {stages.r1.passed}/{stages.r1.seen}
+│  🔥 {r2}     {stages.r2.passed}/{stages.r2.seen}
+│  🕶️ {final}  {stages.final.passed}/{stages.final.seen}
+│
+│  {categoryName}  {held}/{runs}
+│  …one line per entry of `attacks`
+└──────────────────────────────────────
+```
+
+Labels: `{repeat}` is "Repeat runs" / "재면접", `{hiredIn}` is "Hired in" / "합격". Leave out the line of a round no run reached, and the attack lines when `attacks` is empty. `attacks[].category` is a machine token; show it as is.
+
+Under the frame add one line: "Same tasks, scenarios and attacks every run; only the candidate's answers and the grading vary." / "판마다 과제·시나리오·공격은 같고, 지원자 답변과 채점만 달라집니다."
