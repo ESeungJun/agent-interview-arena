@@ -61,6 +61,7 @@ async function createContext(opts: EngineOptions) {
     taskLanguage: documentLanguage(opts.md),
     quick: opts.quick ?? false,
     droppedFlags: [],
+    modelIds: { interviewer: [], candidate: [] },
     usage: {
       interviewer: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0, calls: 0 },
       candidate: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0, calls: 0 },
@@ -134,6 +135,8 @@ export type ChallengeReport = {
   usage: Usage;
   /** 근거 인용이 원문과 맞지 않아 실격으로 쓰지 못한 평가 공격 신고 (운영자 검토용). 없으면 빈 배열 */
   droppedFlags?: DroppedFlag[];
+  /** 실제로 답한 모델 ID. 백엔드가 알려 주지 않으면 빈 배열이다 (이 기능 전의 기록에는 없다) */
+  models?: { interviewer: string[]; candidate: string[] };
 };
 
 export class ChallengeLockedError extends Error {}
@@ -170,7 +173,7 @@ export async function runChallenge(opts: EngineOptions, challenge: Challenge, pr
     challenge, startedAt, backend: opts.llm.backend, caveats,
     config: { target: opts.target, division: opts.division, engine, interviewer: opts.interviewer, generator: opts.generator ?? opts.interviewer, seed, exam: opts.freshExam ? "fresh" : ctx.exam.quarter, outputLanguage: ctx.outputLanguage, taskLanguage: ctx.taskLanguage, mode: ctx.quick ? "quick" : "ranked" },
     passed: outcome.passed && !outcome.securityBan, securityBan: outcome.securityBan, result, stages, usage: ctx.usage,
-    droppedFlags: ctx.droppedFlags ?? [],
+    droppedFlags: ctx.droppedFlags ?? [], models: ctx.modelIds,
   };
 }
 
@@ -188,6 +191,7 @@ export type InterviewReport = {
   reached: Stage; result: string; stages: StageResults;
   usage: Usage;
   droppedFlags?: DroppedFlag[];
+  models?: { interviewer: string[]; candidate: string[] };
 };
 
 export async function interview(opts: InterviewOptions): Promise<InterviewReport> {
@@ -195,7 +199,7 @@ export async function interview(opts: InterviewOptions): Promise<InterviewReport
   const report: InterviewReport = {
     agent: opts.agentName, startedAt: new Date().toISOString(), backend: opts.llm.backend, caveats,
     config: { target: opts.target, division: opts.division, engine, interviewer: opts.interviewer, generator: opts.generator ?? opts.interviewer, seed, exam: opts.freshExam ? "fresh" : ctx.exam.quarter, outputLanguage: ctx.outputLanguage, taskLanguage: ctx.taskLanguage, mode: ctx.quick ? "quick" : "ranked" },
-    reached: "security", result: "", stages: {}, usage: ctx.usage, droppedFlags: ctx.droppedFlags,
+    reached: "security", result: "", stages: {}, usage: ctx.usage, droppedFlags: ctx.droppedFlags, models: ctx.modelIds,
   };
 
   const stop = (stage: Stage, outcome: StageOutcome): boolean => {

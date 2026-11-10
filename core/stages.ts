@@ -36,6 +36,8 @@ export type Context = {
    * 실격시키지는 않되 버린 흔적을 결과에 남겨 운영자가 볼 수 있게 한다. 없으면 기록하지 않는다 (예전 호출부).
    */
   droppedFlags?: DroppedFlag[];
+  /** 실제로 답한 모델 ID (백엔드가 알려 준 것만). 별칭이 가리키는 세대가 바뀌어도 기록이 섞이지 않게 결과에 남긴다 */
+  modelIds?: { interviewer: string[]; candidate: string[] };
 };
 export type DroppedFlag = { stage: string; evidence: string | null; reason: string | null };
 /** costUsd 는 가격을 모르는 모델이 한 번이라도 섞이면 null 이다 (0 으로 적으면 비용 합계가 조용히 줄어든다) */
@@ -50,6 +52,27 @@ function track(ctx: Context, who: "interviewer" | "candidate", r: ConverseResult
   u.cacheReadTokens += r.usage.cacheReadTokens;
   u.costUsd = u.costUsd === null || r.usage.costUsd === null ? null : u.costUsd + r.usage.costUsd;
   u.calls += r.turns.length;
+  const seen = ctx.modelIds?.[who];
+  for (const id of r.modelIds ?? []) if (seen && !seen.includes(id)) seen.push(id);
+}
+
+/**
+ * 면접관 출력이 스키마의 뼈대를 갖췄는가: 최상위 필수 키가 다 있고, 배열·객체로 정해진 키가 그 타입인가.
+ * API 백엔드는 구조화 출력이 모양을 보장하지만 CLI 백엔드는 텍스트를 JSON 으로 읽은 값이 올 수 있다.
+ * 깊은 검증은 하지 않는다 (판정 하나하나는 뒤 단계가 다듬는다). 뼈대가 틀리면 "JSON 아님"과 같은 재시도 경로로 보낸다.
+ */
+export function shapeProblem(json: unknown, schema: Record<string, unknown>): string | null {
+  if (!json || typeof json !== "object" || Array.isArray(json)) return "객체가 아님";
+  const o = json as Record<string, unknown>;
+  const required = Array.isArray(schema.required) ? (schema.required as string[]) : [];
+  const props = (schema.properties ?? {}) as Record<string, { type?: unknown }>;
+  for (const key of required) {
+    if (!(key in o)) return `필수 키 ${key} 없음`;
+    const type = props[key]?.type;
+    if (type === "array" && !Array.isArray(o[key])) return `${key} 가 배열이 아님`;
+    if (type === "object" && (!o[key] || typeof o[key] !== "object" || Array.isArray(o[key]))) return `${key} 가 객체가 아님`;
+  }
+  return null;
 }
 
 /** 판정 스키마를 좁힐 때 쓰는 이름·항목 목록 (1·2차) */
@@ -74,9 +97,10 @@ async function askInterviewer<T>(
       cache,
     });
     track(ctx, "interviewer", r);
-    const json = r.turns[0].json;
-    if (json && typeof json === "object") return json as T;
-    const reason = r.turns[0].stopReason ?? (r.turns[0].refused ? 'refusal' : 'unknown');
+    const json = r.turns[0]?.json;
+    const problem = json && typeof json === "object" ? shapeProblem(json, schema) : null;
+    if (json && typeof json === "object" && !problem) return json as T;
+    const reason = problem ?? r.turns[0]?.stopReason ?? (r.turns[0]?.refused ? 'refusal' : 'unknown');
     reasons.push(reason);
     ctx.log(`  ⚠️ 면접관 출력이 스키마 JSON이 아님 (시도 ${attempt}, ${reason})`);
   }

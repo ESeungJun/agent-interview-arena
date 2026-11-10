@@ -11773,10 +11773,10 @@ var init_node2 = __esm({
     GREP_MAX_LINE_LENGTH = 2e3;
     GLOB_RESULT_LIMIT = 200;
     BashTimeoutError = class extends AnthropicError {
-      constructor(timeoutMs) {
-        super(`bash command timed out after ${timeoutMs}ms`);
+      constructor(timeoutMs2) {
+        super(`bash command timed out after ${timeoutMs2}ms`);
         this.name = "BashTimeoutError";
-        this.timeoutMs = timeoutMs;
+        this.timeoutMs = timeoutMs2;
       }
     };
     ANSI_RE = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
@@ -11820,7 +11820,7 @@ var init_node2 = __esm({
           if (__classPrivateFieldGet(this, _BashSession_closed, "f")) {
             throw new AnthropicError("bash session terminated");
           }
-          const timeoutMs = opts.timeoutMs ?? BASH_DEFAULT_TIMEOUT_MS;
+          const timeoutMs2 = opts.timeoutMs ?? BASH_DEFAULT_TIMEOUT_MS;
           const signal = opts.signal;
           signal?.throwIfAborted();
           __classPrivateFieldSet(this, _BashSession_buf, "", "f");
@@ -11840,7 +11840,7 @@ var init_node2 = __esm({
               await Promise.race([
                 sentinelSeen,
                 new Promise((_, reject) => {
-                  timer = setTimeout(() => reject(new BashTimeoutError(timeoutMs)), timeoutMs);
+                  timer = setTimeout(() => reject(new BashTimeoutError(timeoutMs2)), timeoutMs2);
                 }),
                 new Promise((_, reject) => {
                   if (!signal)
@@ -25534,9 +25534,9 @@ var init_client = __esm({
           let timeoutMillis;
           const retryAfterMillisHeader = responseHeaders?.get("retry-after-ms");
           if (retryAfterMillisHeader) {
-            const timeoutMs = parseFloat(retryAfterMillisHeader);
-            if (!Number.isNaN(timeoutMs)) {
-              timeoutMillis = timeoutMs;
+            const timeoutMs2 = parseFloat(retryAfterMillisHeader);
+            if (!Number.isNaN(timeoutMs2)) {
+              timeoutMillis = timeoutMs2;
             }
           }
           const retryAfterHeader = responseHeaders?.get("retry-after");
@@ -26840,6 +26840,21 @@ function track(ctx, who, r) {
   u.cacheReadTokens += r.usage.cacheReadTokens;
   u.costUsd = u.costUsd === null || r.usage.costUsd === null ? null : u.costUsd + r.usage.costUsd;
   u.calls += r.turns.length;
+  const seen = ctx.modelIds?.[who];
+  for (const id of r.modelIds ?? []) if (seen && !seen.includes(id)) seen.push(id);
+}
+function shapeProblem(json, schema) {
+  if (!json || typeof json !== "object" || Array.isArray(json)) return "\uAC1D\uCCB4\uAC00 \uC544\uB2D8";
+  const o = json;
+  const required = Array.isArray(schema.required) ? schema.required : [];
+  const props = schema.properties ?? {};
+  for (const key of required) {
+    if (!(key in o)) return `\uD544\uC218 \uD0A4 ${key} \uC5C6\uC74C`;
+    const type = props[key]?.type;
+    if (type === "array" && !Array.isArray(o[key])) return `${key} \uAC00 \uBC30\uC5F4\uC774 \uC544\uB2D8`;
+    if (type === "object" && (!o[key] || typeof o[key] !== "object" || Array.isArray(o[key]))) return `${key} \uAC00 \uAC1D\uCCB4\uAC00 \uC544\uB2D8`;
+  }
+  return null;
 }
 async function askInterviewer(ctx, promptFile, nonce, user, schemaName, cache = false, first = ctx.interviewer, restrict) {
   const schema = restrict ? restrictVerdicts(loadSchema(schemaName), restrict.targets, restrict.ids) : loadSchema(schemaName);
@@ -26856,9 +26871,10 @@ async function askInterviewer(ctx, promptFile, nonce, user, schemaName, cache = 
       cache
     });
     track(ctx, "interviewer", r);
-    const json = r.turns[0].json;
-    if (json && typeof json === "object") return json;
-    const reason = r.turns[0].stopReason ?? (r.turns[0].refused ? "refusal" : "unknown");
+    const json = r.turns[0]?.json;
+    const problem = json && typeof json === "object" ? shapeProblem(json, schema) : null;
+    if (json && typeof json === "object" && !problem) return json;
+    const reason = problem ?? r.turns[0]?.stopReason ?? (r.turns[0]?.refused ? "refusal" : "unknown");
     reasons.push(reason);
     ctx.log(`  \u26A0\uFE0F \uBA74\uC811\uAD00 \uCD9C\uB825\uC774 \uC2A4\uD0A4\uB9C8 JSON\uC774 \uC544\uB2D8 (\uC2DC\uB3C4 ${attempt}, ${reason})`);
   }
@@ -27522,6 +27538,7 @@ async function createContext(opts) {
     taskLanguage: documentLanguage(opts.md),
     quick: opts.quick ?? false,
     droppedFlags: [],
+    modelIds: { interviewer: [], candidate: [] },
     usage: {
       interviewer: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0, calls: 0 },
       candidate: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0, calls: 0 }
@@ -27604,7 +27621,8 @@ async function runChallenge(opts, challenge, prior) {
     result,
     stages,
     usage: ctx.usage,
-    droppedFlags: ctx.droppedFlags ?? []
+    droppedFlags: ctx.droppedFlags ?? [],
+    models: ctx.modelIds
   };
 }
 
@@ -27623,7 +27641,7 @@ var MODEL_IDS = {
 };
 var PRICES = {
   "claude-haiku-5-5": { input: 0.1, output: 0.5, cacheRead: 0.01, long: { input: 0.5, output: 2.5, cacheRead: 0.05 } },
-  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.2 },
+  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.1 },
   "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2 }
 };
 function costUsd(model, u) {
@@ -27635,6 +27653,7 @@ function costUsd(model, u) {
   const p = base.long && u.input_tokens + write + read > 1e5 ? base.long : base;
   return (u.input_tokens * p.input + write * p.input * 1.25 + read * p.cacheRead + u.output_tokens * p.output) / 1e6;
 }
+var MODEL_ID = /^claude-[a-z0-9-]{1,50}$/;
 function createApiLlm(opts) {
   const client = new Anthropic({ apiKey: opts.apiKey });
   return { backend: "api", converse: (req) => converseApi(client, req) };
@@ -27643,6 +27662,7 @@ async function converseApi(client, req) {
   const messages = [];
   const turns = [];
   const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0 };
+  const modelIds = /* @__PURE__ */ new Set();
   for (const [i, userTurn] of req.userTurns.entries()) {
     messages.push({ role: "user", content: userTurn });
     const isLast = i === req.userTurns.length - 1;
@@ -27671,11 +27691,12 @@ async function converseApi(client, req) {
     usage.inputTokens += u.input_tokens + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
     usage.cacheReadTokens += u.cache_read_input_tokens ?? 0;
     usage.outputTokens += response.usage.output_tokens;
+    if (typeof response.model === "string" && MODEL_ID.test(response.model)) modelIds.add(response.model);
     const cost = costUsd(response.model ?? params.model, u);
     usage.costUsd = usage.costUsd === null || cost === null ? null : usage.costUsd + cost;
     messages.push({ role: "assistant", content: response.content });
   }
-  return { turns, usage };
+  return { turns, usage, modelIds: [...modelIds] };
 }
 function safeParse(text) {
   const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
@@ -27697,12 +27718,14 @@ async function converseCli(req) {
   const turns = [];
   const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0 };
   let sessionId;
+  const modelIds = /* @__PURE__ */ new Set();
   for (const [i, userTurn] of req.userTurns.entries()) {
     const isLast = i === req.userTurns.length - 1;
     const args = [
       "-p",
+      // 별칭(haiku·sonnet·opus)은 Claude Code 버전에 따라 다른 세대를 가리킨다. API 백엔드와 같은 모델 ID 로 고정한다
       "--model",
-      req.model,
+      MODEL_IDS[req.model],
       "--system-prompt",
       req.system,
       "--tools",
@@ -27731,26 +27754,72 @@ async function converseCli(req) {
     usage.cacheReadTokens += u.cache_read_input_tokens ?? 0;
     usage.outputTokens += u.output_tokens ?? 0;
     usage.costUsd = (usage.costUsd ?? 0) + (out2.total_cost_usd ?? 0);
+    const answered = answeringModel(out2);
+    if (answered) modelIds.add(answered);
   }
-  return { turns, usage };
+  return { turns, usage, modelIds: [...modelIds] };
 }
-function runClaude(args, stdin, attempt = 1) {
+function answeringModel(out2) {
+  const table = out2.modelUsage;
+  if (!table || typeof table !== "object") return void 0;
+  const rows = Object.entries(table).filter(([id]) => MODEL_ID.test(id)).map(([id, u]) => [id, Number(u?.outputTokens ?? 0) || 0]).sort((a, b) => b[1] - a[1]);
+  return rows[0]?.[0];
+}
+var CLI_TIMEOUT_MS = 24e4;
+var CLI_ATTEMPTS = 3;
+var KILL_GRACE_MS = 3e3;
+function timeoutMs() {
+  const v = Number(process.env.ARENA_CLI_TIMEOUT_MS);
+  return Number.isFinite(v) && v >= 1e3 ? v : CLI_TIMEOUT_MS;
+}
+function runClaude(args, stdin, opts = {}, attempt = 1) {
+  const limit2 = opts.timeoutMs ?? timeoutMs();
+  const log = opts.log ?? ((msg) => process.stderr.write(`${msg}
+`));
   return new Promise((resolve3, reject) => {
-    const child = spawn2("claude", args, { cwd: cliWorkdir, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn2(opts.command ?? "claude", args, { cwd: cliWorkdir, stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
+    let timedOut = false;
+    let settled = false;
+    let killer;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+      killer = setTimeout(() => child.kill("SIGKILL"), opts.killGraceMs ?? KILL_GRACE_MS);
+    }, limit2);
+    const retryOrFail = (why) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (attempt < CLI_ATTEMPTS) {
+        log(`  \u21BB claude -p \uB2E4\uC2DC \uC2DC\uB3C4 (${attempt}/${CLI_ATTEMPTS} \uC2E4\uD328: ${why.split("\n")[0].slice(0, 200)})`);
+        return resolve3(runClaude(args, stdin, opts, attempt + 1));
+      }
+      reject(new Error(`claude -p \uC2E4\uD328: ${why}
+${stderr.slice(0, 500)}`));
+    };
     child.stdout.on("data", (d) => stdout += d);
     child.stderr.on("data", (d) => stderr += d);
-    child.on("error", reject);
+    child.on("error", (e) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(e);
+    });
+    child.stdin.on("error", () => {
+    });
     child.on("close", (code) => {
+      clearTimeout(killer);
+      if (timedOut) return retryOrFail(`${Math.round(limit2 / 1e3)}\uCD08 \uC548\uC5D0 \uB05D\uB098\uC9C0 \uC54A\uC544 \uC911\uB2E8\uD568`);
       try {
         const parsed = JSON.parse(stdout);
         if (parsed.is_error) throw new Error(`claude \uC751\uB2F5 \uC624\uB958: ${parsed.result ?? stderr}`);
+        settled = true;
+        clearTimeout(timer);
         resolve3(parsed);
       } catch (e) {
-        if (attempt < 3) return resolve3(runClaude(args, stdin, attempt + 1));
-        reject(new Error(`claude -p \uC2E4\uD328 (exit ${code}): ${e.message}
-${stderr.slice(0, 500)}`));
+        retryOrFail(`exit ${code}: ${e.message}`);
       }
     });
     child.stdin.end(stdin);
@@ -28325,7 +28394,10 @@ function sessionOverview(s) {
     resultFile: statePath(s.session)
   };
 }
+var MIN_NODE_MAJOR = 20;
 async function main() {
+  const nodeMajor = Number(process.versions.node.split(".")[0]);
+  if (nodeMajor < MIN_NODE_MAJOR) fail("old_node", `Node ${MIN_NODE_MAJOR} \uC774\uC0C1\uC774 \uD544\uC694\uD569\uB2C8\uB2E4 (\uC9C0\uAE08 ${process.versions.node}).`);
   const [command, ...rest] = process.argv.slice(2);
   const { values, positionals } = parseArgs({
     args: rest,

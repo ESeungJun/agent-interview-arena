@@ -23,7 +23,7 @@ export const MODEL_IDS: Record<ModelAlias, string> = {
 type Price = { input: number; output: number; cacheRead: number; long?: Omit<Price, "long"> };
 const PRICES: Record<string, Price> = {
   "claude-haiku-5-5": { input: 0.1, output: 0.5, cacheRead: 0.01, long: { input: 0.5, output: 2.5, cacheRead: 0.05 } },
-  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.2 },
+  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.1 },
   "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2 },
 };
 
@@ -55,7 +55,12 @@ export type ConverseResult = {
   turns: TurnResult[];
   /** inputTokens는 캐시 쓰기·읽기를 포함한 전체 입력이다. cacheReadTokens는 그중 캐시에서 읽은 양이다. */
   usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; costUsd: number | null };
+  /** 실제로 답한 모델 ID (백엔드가 알려 줄 때만). 서버 측 폴백이나 CLI 별칭 때문에 요청한 모델과 다를 수 있어 기록에 남긴다 */
+  modelIds?: string[];
 };
+
+/** 기록에 남길 수 있는 모델 ID 모양. 순위표도 같은 모양만 받는다 */
+export const MODEL_ID = /^claude-[a-z0-9-]{1,50}$/;
 
 /** 면접 한 번에 쓰는 LLM 호출기. 백엔드 이름은 결과 보고서에 남긴다. */
 export type Llm = { backend: Backend; converse(req: ConverseRequest): Promise<ConverseResult> };
@@ -72,6 +77,7 @@ async function converseApi(client: Anthropic, req: ConverseRequest): Promise<Con
   const messages: Anthropic.MessageParam[] = [];
   const turns: TurnResult[] = [];
   const usage: ConverseResult["usage"] = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0 };
+  const modelIds = new Set<string>();
 
   for (const [i, userTurn] of req.userTurns.entries()) {
     messages.push({ role: "user", content: userTurn });
@@ -112,11 +118,12 @@ async function converseApi(client: Anthropic, req: ConverseRequest): Promise<Con
     usage.inputTokens += u.input_tokens + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
     usage.cacheReadTokens += u.cache_read_input_tokens ?? 0;
     usage.outputTokens += response.usage.output_tokens;
+    if (typeof response.model === "string" && MODEL_ID.test(response.model)) modelIds.add(response.model);
     const cost = costUsd(response.model ?? params.model, u);
     usage.costUsd = usage.costUsd === null || cost === null ? null : usage.costUsd + cost;
     messages.push({ role: "assistant", content: response.content as Anthropic.ContentBlockParam[] });
   }
-  return { turns, usage };
+  return { turns, usage, modelIds: [...modelIds] };
 }
 
 export function safeParse(text: string): unknown {

@@ -186,3 +186,48 @@ test("분류 모델은 screenSampleRate 가 1 이면 정규식에 안 걸린 명
   assert.equal(all.r.passed, false);
   assert.equal(all.r.securityBan?.rule, "EVAL_SYSTEM_ATTACK");
 });
+
+// ---------------------------------------------------------------- 면접관 출력의 뼈대 검사 (CLI 백엔드)
+
+test("면접관 출력에 필수 키가 없거나 타입이 틀리면 뼈대 문제로 본다", async () => {
+  const { shapeProblem } = await import("./stages.ts");
+  const { loadSchema } = await import("./prompts.ts");
+  const schema = loadSchema("round_evaluation");
+  const ok = { security_flag: quiet, verdicts: [], promise_vs_practice: [], decisive_mistake: null, comment: "" };
+  assert.equal(shapeProblem(ok, schema), null);
+  assert.match(shapeProblem({ ...ok, verdicts: undefined }, schema) ?? "", /verdicts/);
+  assert.match(shapeProblem({ ...ok, verdicts: "none" }, schema) ?? "", /verdicts 가 배열이 아님/);
+  assert.match(shapeProblem({ ...ok, security_flag: null }, schema) ?? "", /security_flag 가 객체가 아님/);
+  assert.equal(shapeProblem([], schema), "객체가 아님");
+  assert.match(shapeProblem({ attack_results: {} }, loadSchema("final_red_team")) ?? "", /security_flag|attack_results/);
+});
+
+test("verdicts 가 빠진 면접관 출력은 예외 대신 다시 판정으로 처리된다", async () => {
+  const { evaluateRound2 } = await import("./stages.ts");
+  const usage = () => ({ inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0, calls: 0 });
+  const logs: string[] = [];
+  const models: string[] = [];
+  const good = { security_flag: quiet, verdicts: [], promise_vs_practice: [], decisive_mistake: null, comment: "" };
+  let n = 0;
+  const ctx = {
+    md: "agent spec", target: "generic", engine: "haiku", interviewer: "haiku", rng: () => 0.5, exam: {} as never, screenSampleRate: 0,
+    log: (m: string) => logs.push(m), usage: { interviewer: usage(), candidate: usage() }, outputLanguage: "en", taskLanguage: "en", quick: true,
+    droppedFlags: [], modelIds: { interviewer: [], candidate: [] },
+    llm: {
+      backend: "cli",
+      converse: async (req: { model: string }) => {
+        models.push(req.model);
+        // 첫 답은 CLI 가 텍스트로 떨어뜨린, verdicts 없는 객체
+        const json = n++ === 0 ? { security_flag: quiet, comment: "looks fine" } : good;
+        return { turns: [{ text: "", refused: false, json }], usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0 }, modelIds: ["claude-haiku-5-5"] };
+      },
+    },
+  } as never;
+  const scenarios = ["S1", "S2", "S3"].map(id => ({ id, type: "T", turn1_message: "m", turn2_pressure: "p", tool_mocks: [], trap: "", expected_turn1: "", expected_turn2: "" }));
+  const doc = { job_profile: { job_title: "", core_tasks: [], typical_failure_modes: [], has_tools: false }, verifiable_contracts: [] };
+  const j = await evaluateRound2(ctx, doc as never, scenarios as never, { "S1-a": ["a", "b"], "S2-a": ["a", "b"], "S3-a": ["a", "b"] }, []);
+  assert.equal(j.score, 0);
+  assert.deepEqual(models.slice(0, 2), ["haiku", "sonnet"], "뼈대가 틀린 출력은 Sonnet 이 다시 판정한다");
+  assert.ok(logs.some(l => l.includes("스키마 JSON이 아님") && l.includes("verdicts")), logs.join(" | "));
+  assert.deepEqual((ctx as { modelIds: { interviewer: string[] } }).modelIds.interviewer, ["claude-haiku-5-5"]);
+});

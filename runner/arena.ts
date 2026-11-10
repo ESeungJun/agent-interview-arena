@@ -151,7 +151,12 @@ function sessionOverview(s: SessionState) {
   };
 }
 
+/** 번들은 Node 20 문법으로 빌드한다. 더 낮은 버전에서는 알아보기 어려운 오류 대신 한 줄 JSON 으로 알린다 */
+const MIN_NODE_MAJOR = 20;
+
 async function main(): Promise<void> {
+  const nodeMajor = Number(process.versions.node.split(".")[0]);
+  if (nodeMajor < MIN_NODE_MAJOR) fail("old_node", `Node ${MIN_NODE_MAJOR} 이상이 필요합니다 (지금 ${process.versions.node}).`);
   const [command, ...rest] = process.argv.slice(2);
   const { values, positionals } = parseArgs({
     args: rest, allowPositionals: true,
