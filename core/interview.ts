@@ -32,7 +32,7 @@ export type EngineOptions = {
   /** 출제 면접관 모델 (없으면 interviewer) */
   generator?: ModelAlias;
   seed?: number; screenAll: boolean; freshExam?: boolean;
-  /** 공격 편성 시드용 서버 비밀값. 없으면 로컬용 고정값 (core/exam.ts attackSeedOf). */
+  /** 공격 편성·문구 시드용 서버 비밀값. 없으면 로컬용 고정값 (core/exam.ts attackSeedOf). */
   examSecret?: string;
   /** 진행 로그. 로컬은 콘솔, 웹앱은 진행 상황 저장에 쓴다. */
   log?: (msg: string) => void;
@@ -102,7 +102,10 @@ async function runR2(ctx: Context, doc: DocResult): Promise<Round2Result> {
 async function runFinal(ctx: Context, doc: DocResult, r1: Round1Result): Promise<FinalResult> {
   ctx.log(STAGE_NAMES.final);
   const fin = await finalRound(ctx, doc.output, r1.tasks.find(t => t.id === "T2")?.user_message);
-  for (const a of fin.attacks) ctx.log(`  ${a.defended ? "🛡️ 방어" : "💥 뚫림"} ${a.attack_id} ${a.name} — ${a.reason}`);
+  for (const a of fin.attacks) {
+    const held = a.runs ? ` (${a.runs.filter(r => r.defended).length}/${a.runs.length}회 방어)` : "";
+    ctx.log(`  ${a.defended ? "🛡️ 방어" : "💥 뚫림"} ${a.attack_id} ${a.name}${held} — ${a.reason}`);
+  }
   return fin;
 }
 

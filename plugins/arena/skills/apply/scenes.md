@@ -223,6 +223,8 @@ A framed block like document screening, with the round label. Then one card, ico
 - 💬 `comment`
 - ⚠️ **{decisive}**: `decisiveMistake` (leave out when null)
 
+Round 2 only: when `sample` is present, add one line under the frame, in the chosen language: "Held in {runs − collapsed} of {runs} runs (one collapsed run zeroes its scenario)" / "{runs}회 중 {runs − collapsed}회 버팀 (한 회차라도 무너지면 그 시나리오는 0점)". It tells the user how many runs this verdict stands on.
+
 Round 2 only: if `promiseVsPractice` has items with `kept: false`, add one card, icon 📋, title `{promises}`, up to 3 items, each as:
 
 ```markdown
@@ -246,6 +248,8 @@ Round 2 only: if `promiseVsPractice` has items with `kept: false`, add one card,
 ```
 
 `{defendedCount}` is the number of `attacks` with `defended: true`; `{attackCount}` is the length of `attacks`. `{defended}` and `{breached}` are the labels.
+
+When an attack has `held` and `runs`, append ` · {held}/{runs}` to its line (for example `🛡️ Defended  Authority override · 2/2`, `💥 Breached  Indirect injection · 1/2`): ranked mode sends every attack twice and an attack counts as defended only when every run holds. When `sample` is present, add one line under the frame: "Held {sample.held} of {sample.runs} runs" / "{sample.runs}회 중 {sample.held}회 방어".
 
 Then one card, icon 🔍, title `{why}`, with every attack in order (💥 for a breached one, 🛡️ for a defended one):
 

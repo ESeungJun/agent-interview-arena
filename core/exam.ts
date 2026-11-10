@@ -1,4 +1,4 @@
-// 분기 고정 출제: 같은 .md는 같은 분기 안에서 같은 시험(1차 과제·2차 시나리오·최종 공격 편성)을 받는다.
+// 분기 고정 출제: 같은 .md는 같은 분기 안에서 같은 시험(1차 과제·2차 시나리오)을 받는다. 최종 공격 편성과 문구는 분기로만 정해진다.
 // 분기가 바뀌면 새로 출제한다. 과제를 사람이 손보지 않고 분기마다 자동으로 정비하는 방식이다.
 //
 // 키는 분기 + .md 원문 해시다. .md를 한 글자라도 고치면 새 시험이 나온다. 직무가 바뀌었을 수 있기 때문이다.
@@ -46,10 +46,6 @@ export function mdHash(md: string): string {
 export const LOCAL_EXAM_SECRET = "arena-local-dev-exam-secret";
 
 /**
- * 공격 편성 시드. 서버 비밀값으로 HMAC을 내야 출제 알고리즘을 아는 사람이 제출 전에 .md를 바꿔 가며
- * 쉬운 편성을 미리 계산해 고를 수 없다. 비밀값은 호출하는 쪽이 준다(웹은 ARENA_EXAM_SECRET, 운영 필수).
- */
-/**
  * 공격 문구 조립 시드. 분기 + 공격 ID 에서 나오고 .md 와 무관하다.
  * 같은 분기에는 모든 지원자가 같은 문구를 받고, 분기가 바뀌면 문구가 바뀐다.
  */
@@ -58,8 +54,14 @@ export function variantSeedOf(quarter: string, attackId: string, secret: string 
   return parseInt(mac.slice(0, 8), 16);
 }
 
-export function attackSeedOf(quarter: string, hash: string, secret: string = LOCAL_EXAM_SECRET): number {
-  const mac = createHmac("sha256", secret).update(`${quarter}:${hash}`).digest("hex");
+/**
+ * 공격 편성 시드. 분기에서만 나오고 .md 와 무관하다: 같은 분기에는 모든 지원자가 같은 편성을 받는다.
+ * 예전에는 .md 해시가 들어가, 명세 끝에 한 줄을 달리 붙여 가며 쉬운 편성이 나올 때까지 미리 계산해 고를 수 있었다
+ * (로컬 비밀값은 공개 상수다). 편성이 명세와 무관하면 고를 것이 없고, 같은 분기 기록끼리 같은 공격으로 비교된다.
+ * 비밀값을 주면(재검증 등 서버 쪽 실행) 편성 자체를 미리 알 수 없다.
+ */
+export function attackSeedOf(quarter: string, secret: string = LOCAL_EXAM_SECRET): number {
+  const mac = createHmac("sha256", secret).update(`lineup:${quarter}`).digest("hex");
   return parseInt(mac.slice(0, 8), 16);
 }
 
@@ -82,7 +84,7 @@ export function memoryExamStore(): ExamStore {
 
 export type Exam = {
   quarter: string;
-  /** 최종 면접 공격 편성용 시드. 분기 + .md에서 정해져 같은 시험이면 같은 공격을 받는다. */
+  /** 최종 면접 공격 편성용 시드. 분기로만 정해져 같은 분기에는 모두 같은 공격을 받는다. */
   attackSeed: number;
   /** 공격 문구 조립 시드. 분기 + 공격 ID 로 정해진다. */
   variantSeed(attackId: string): number;
@@ -97,7 +99,7 @@ export async function openExam(md: string, opts: { store: ExamStore; date?: Date
   const record: ExamRecord = (!opts.fresh && (await opts.store.load(quarter, hash))) || { quarter, mdHash: hash };
   return {
     quarter,
-    attackSeed: attackSeedOf(quarter, hash, opts.secret),
+    attackSeed: attackSeedOf(quarter, opts.secret),
     variantSeed: attackId => variantSeedOf(quarter, attackId, opts.secret),
     get: key => record[key],
     set: async (key, value) => {

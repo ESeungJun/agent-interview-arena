@@ -38,10 +38,10 @@ The engine is `node ${CLAUDE_SKILL_DIR}/bin/arena.mjs`. Every command prints exa
 
 ## 3. Pick the mode
 
-- **ranked** (default): two interviewers grade each round and a third breaks ties; round 2 runs every scenario twice. Only ranked results can go on the leaderboard.
-- **quick** (`--quick`): one interviewer, one run per scenario. Cheaper practice; not submittable.
+- **ranked** (default): two interviewers grade each round and a third breaks ties; round 2 runs every scenario twice and the final sends every attack twice. Only ranked results can go on the leaderboard.
+- **quick** (`--quick`): one interviewer, one run per scenario and per attack. Cheaper practice; not submittable.
 
-Tell the user the mode in one line before starting. Also mention, once, that the interview runs on their own Claude plan (or `ANTHROPIC_API_KEY` if set), roughly 30–40 model calls for a ranked run that reaches the final.
+Tell the user the mode in one line before starting. Also mention, once, that the interview runs on their own Claude plan (or `ANTHROPIC_API_KEY` if set), roughly 40–50 model calls for a ranked run that reaches the final.
 
 ## 4. Run the interview
 
