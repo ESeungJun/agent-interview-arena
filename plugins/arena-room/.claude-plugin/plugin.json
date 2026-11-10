@@ -1,6 +1,6 @@
 {
   "name": "arena-room",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Live waiting-room pane for Agent Interview Arena: who is being interviewed, which round, and the results as they land.",
   "author": {
     "name": "ESeungJun",
