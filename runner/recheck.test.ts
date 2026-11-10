@@ -273,6 +273,10 @@ test("시도 수: 그 체급에 먼저 낸 제출을 세고, 받지 않은 제�
   const current = [e("me-1", "Me", "light", 1), e("me-2", "me", "middle", 1), e("you-3", "you", "light", 4)];
   assert.deepEqual(bumpAttempts(current, e("me-9", "me", "light", 3)).map(x => [x.id, x.attempts]), [["me-1", 3]]);
   assert.deepEqual(bumpAttempts(current, e("you-9", "you", "light", 2)), [], "더 큰 값이 이미 있으면 내리지 않는다");
+  // 같은 실행에서 본 제출이 여러 건이면 순서와 상관없이 칸마다 가장 큰 값이 남는다
+  assert.deepEqual(bumpAttempts(current, [e("me-12", "me", "light", 3), e("me-11", "me", "light", 2)]).map(x => [x.id, x.attempts]), [["me-1", 3]]);
+  // 이번에 새로 쓰는 기록에도 같은 값을 올린다 (#20 을 받고 #21 을 받지 않은 경우)
+  assert.deepEqual(bumpAttempts([e("me-20", "me", "open", 2)], [e("me-20", "me", "open", 2), e("me-21", "me", "open", 3)]).map(x => x.attempts), [3]);
 });
 
 test("재면접 기록(runs·passes)은 자기 신고 값으로 실리고, 모양이 틀리면 받지 않는다", () => {
@@ -316,9 +320,21 @@ test("통계: 도달 단계별 기록 수와 공격 범주별 뚫린 수를 낸�
     ["a", [{ category: "SYSTEM_PROMPT_LEAK", defended: true }, { category: "INDIRECT_INJECTION", defended: false }]],
     ["b", [{ category: "SYSTEM_PROMPT_LEAK", defended: true }, { category: "INDIRECT_INJECTION", defended: true }]],
   ]);
-  const stats = boardStats([e("a", "final"), e("b", "final", true), e("c", "r2"), e("d", "doc")], finals);
+  // 미검증 기록은 적어 낸 값을 확인하지 못했으므로 세지 않는다
+  const unverified: BoardEntry = { ...e("z", "final", true), tier: "unverified" };
+  const stats = boardStats([e("a", "final"), e("b", "final", true), e("c", "r2"), e("d", "doc"), unverified], finals);
+  assert.equal(stats.entries, 4);
   assert.deepEqual(stats.reached, { final: 2, r2: 1, doc: 1 });
   assert.equal(stats.hired, 1);
   assert.deepEqual(stats.attacks, [{ category: "INDIRECT_INJECTION", seen: 2, breached: 1 }, { category: "SYSTEM_PROMPT_LEAK", seen: 2, breached: 0 }]);
   assert.deepEqual(boardStats([], new Map()), { entries: 0, hired: 0, reached: {}, attacks: [] });
+});
+
+test("응답이 너무 길어 한도를 넘는 제출물은 엔진이 미리 알아본다", async () => {
+  const { submissionTooLarge } = await import("./board.ts");
+  assert.equal(submissionTooLarge(fresh()), false);
+  const long = JSON.parse(JSON.stringify(fresh()));
+  long.stages.r1.evidence.responses.T2 = "가".repeat(40_001);
+  assert.equal(submissionTooLarge(long), true);
+  assert.equal(submissionTooLarge(roundTrip(buildSubmission(honest.session, "test", { withEvidence: false }))), false);
 });

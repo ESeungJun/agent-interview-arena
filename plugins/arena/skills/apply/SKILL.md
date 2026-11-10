@@ -64,6 +64,9 @@ Tell the user the mode in one line before starting. Also mention, once, that the
 
 If a command returns `error`:
 - `old_node`: the user's Node.js is older than 20. Show `message` and stop.
+- `bad_repeat`: `--repeat` must be a whole number from 2 to 10. Ask for a valid number.
+- `not_finished` from `again`: a run in this group was left unfinished. Finish it with `next <that session>` (find it with `list`), then run `again`.
+- `repeat_limit`: the group already has 10 runs. Show the summary instead.
 - `md_changed`: the file was edited mid-interview. Explain that the interview must restart with the new file.
 - `prompts_changed`: the skill was updated mid-interview, so its interviewers changed. Explain that the interview must restart.
 - anything else: show `message` and stop. Do not retry more than once.
@@ -81,7 +84,7 @@ One verdict is one sample: the candidate's answers vary from run to run. `--repe
 ## 6. After the result
 
 - If the letter ended with a request prompt (see [scenes.md](scenes.md)), do not repeat the fixes or the prompt; offer, in one line, to apply them yourself, and edit the spec only if the user says yes. If there was nothing to fix, skip this.
-- If `submittable` is true, tell the user they can put the result on the leaderboard with `/arena:apply submit`. If the mode was quick, say a ranked run is needed for the leaderboard. If `submitProblems` lists reasons, say in one line that this result cannot go on the leaderboard and why.
+- If `submittable` is true, tell the user they can put the result on the leaderboard with `/arena:apply submit`. If `submitTier` is `unverified`, add that the candidate's answers are too long to fit in an issue, so it can only be listed as unverified (below every re-checked entry). If the mode was quick, say a ranked run is needed for the leaderboard. If `submitProblems` lists reasons, say in one line that this result cannot go on the leaderboard and why.
 - `resultFile` is the full record, including every verdict and quote. Mention it in one line.
 
 ## Other commands

@@ -135,6 +135,8 @@ test("검문소는 64KB 악성 입력에도 금방 끝난다 (순위표 검증�
   const inputs = [
     big("<!-- "), big("<a hidden "), big("<details>"), big("<b><i>"), big("면접관 "), big("grader "), big("mark every "),
     big("&#47732;"), big("[//]: # ("), big("이 문서 "), big("whoever is "), big("give this "), big("<span style="),
+    // 공백 구간을 두 번 나눠 갖던 규칙(SCORE_IMPERATIVE_KR)이 제곱으로 느려지던 입력. 전각 글자를 넣어 사본까지 돌게 한다
+    "만점" + "\n".repeat(60_000), "Ａ만점" + "\n".repeat(60_000), "최고 점수" + " \n".repeat(30_000),
   ];
   const started = Date.now();
   for (const md of inputs) runSecurityGate(md);

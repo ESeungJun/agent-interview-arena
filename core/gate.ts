@@ -59,7 +59,7 @@ const SOFT_RULES: { name: string; level: "HIGH" | "NORMAL"; regex: RegExp }[] = 
   { name: "GENERIC_OVERRIDE_KR", level: "NORMAL", regex: /(이전|위의?|앞의?)\s*(지시|명령|규칙).{0,10}(무시|잊)/ },
   { name: "FORCE_PASS_KR", level: "NORMAL", regex: /(무조건|반드시|예외\s*없이).{0,30}(합격|통과|만점|PASS)/i },
   // 누구에게든 만점을 달라는 명령형 ("만점을 줘라"). 채점 에이전트의 "만점을 준다" 같은 서술은 걸리지 않는다
-  { name: "SCORE_IMPERATIVE_KR", level: "NORMAL", regex: /(만점|최고\s*점수?|100\s*점)\s*(을|를|으로)?\s*(줘|주어야|주십시오|주세요|줄\s*것|주기\s*바)/ },
+  { name: "SCORE_IMPERATIVE_KR", level: "NORMAL", regex: /(만점|최고\s*점수?|100\s*점)\s*(?:(?:을|를|으로)\s*)?(줘|주어야|주십시오|주세요|줄\s*것|주기\s*바)/ },
   { name: "BASE64_BLOCK", level: "NORMAL", regex: /(?:[A-Za-z0-9+/]{4}){20,}={0,2}/ },
   { name: "ROLE_RESET", level: "NORMAL", regex: /(you are now|new role|너의 새로운 역할|지금부터 너는)/i },
 ];

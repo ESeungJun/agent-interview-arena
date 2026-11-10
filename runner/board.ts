@@ -185,6 +185,20 @@ export function buildSubmission(s: SessionLike, arenaVersion: string, opts: { wi
   };
 }
 
+/**
+ * 제출물이 순위표의 크기 한도를 넘는가: Issue 본문, 풀린 크기, 과제·응답 한 건의 길이.
+ * 넘으면 순위표가 "형식이 다르다"로 거절하므로, 엔진이 제출 전에 이유를 알려 주는 데 쓴다.
+ */
+export function submissionTooLarge(sub: Submission): boolean {
+  const { r1, r2, final } = sub.stages;
+  const texts = [
+    ...(r1?.evidence ? [...Object.values(r1.evidence.responses), ...r1.evidence.tasks.map(t => t.user_message)] : []),
+    ...(r2?.evidence ? [...Object.values(r2.evidence.transcripts).flat(), ...r2.evidence.scenarios.flatMap(x => [x.turn1_message, x.turn2_pressure])] : []),
+    ...(final?.attacks.flatMap(a => (a.runs ?? []).map(r => r.response)) ?? []),
+  ];
+  return encodeSubmission(sub).length > MAX_PAYLOAD_CHARS || JSON.stringify(sub).length > MAX_DECODED_BYTES || texts.some(t => t.length > MAX_TEXT);
+}
+
 export function encodeSubmission(sub: Submission): string {
   return gzipSync(Buffer.from(JSON.stringify(sub))).toString("base64");
 }
@@ -412,8 +426,9 @@ const R2_SCENARIOS = ["S1", "S2", "S3"];
 /**
  * 단계마다 꼭 있어야 하는 모양: 그 단위(과제·시나리오)의 판정에 빠짐없이 있어야 하는 항목.
  * 엔진이 빠진 항목을 채점 제외로 채우므로 정직한 결과는 다 있다.
- * 이 검사들은 "엔진이 만든 결과와 모양이 다른 제출"을 거르는 일관성 검사다. 지원자 응답이 제출물에 없으므로
- * 모든 판정을 true 로 적은 위조는 막지 못한다 (README). 그래서 정직한 결과를 거절할 위험이 있는 조건은 두지 않는다.
+ * 이 검사들은 "엔진이 만든 결과와 모양이 다른 제출"을 거르는 일관성 검사다. 예전 형식(1)은 지원자 응답이 제출물에 없어
+ * 모든 판정을 true 로 적은 위조를 막지 못한다 (README). 형식 2 는 recheckEvidence 가 응답과 대조한다.
+ * 정직한 결과를 거절할 위험이 있는 조건은 두지 않는다.
  */
 type Shape = { units: string[]; itemId: RegExp; each: (unit: string) => string[] };
 const R1_SHAPE: Shape = { units: R1_TASKS, itemId: R1_ITEM_ID, each: u => (u === "T1" ? [...R1_PER_RESPONSE, "R1-7"] : R1_PER_RESPONSE) };
@@ -427,7 +442,7 @@ const MIN_COUNTED_PER_UNIT = 3;
 
 /**
  * 판정 묶음의 모양 검사. 같은 (target, 항목)이 두 번 있으면 비율이 부풀므로 받지 않는다.
- * 1·2차 판정의 근거는 지원자 응답을 인용하는데 응답은 제출물에 없어 대조할 수 없다. 그래서 단위마다 셈하는 항목이 충분한지만 본다.
+ * 여기서는 단위마다 셈하는 항목이 충분한지만 본다. 근거 인용 대조는 응답이 실려 온 형식 2 에서 recheckEvidence 가 한다.
  */
 function verdictShape(stage: string, vs: Verdict[], shape: Shape): string[] {
   const keys = vs.map(v => `${v.target ?? ""}\0${v.id}`);
@@ -783,8 +798,12 @@ export type BoardStats = {
   attacks: { category: string; seen: number; breached: number }[];
 };
 
-/** "어디서 떨어지나" 통계. 순위표에 오른 기록(사람 × 체급의 최고 기록)만 센다 */
-export function boardStats(ranked: BoardEntry[], finals: Map<string, { category: string; defended: boolean }[]>): BoardStats {
+/**
+ * "어디서 떨어지나" 통계. 순위표에 오른 기록(사람 × 체급의 최고 기록) 중 응답 원문으로 대조한 것만 센다.
+ * 미검증 기록은 적어 낸 값을 확인하지 못했으므로 통계에 섞지 않는다.
+ */
+export function boardStats(all: BoardEntry[], finals: Map<string, { category: string; defended: boolean }[]>): BoardStats {
+  const ranked = all.filter(e => e.tier !== "unverified");
   const reached: Record<string, number> = {};
   const attacks = new Map<string, { seen: number; breached: number }>();
   for (const e of ranked) {

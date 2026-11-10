@@ -207,10 +207,14 @@ export function countAttempts(rows: { number: number; title: string }[], issue: 
   return earlier + 1;
 }
 
-/** 받지 않은(더 좋은 기록이 이미 있는) 제출도 시도 수에는 들어간다. 그 칸에 남아 있는 기록들의 시도 수를 올린다 */
-export function bumpAttempts(entries: BoardEntry[], dropped: BoardEntry): BoardEntry[] {
-  const attempts = dropped.attempts ?? 0;
-  return entries.filter(e => slotOf(e) === slotOf(dropped) && (e.attempts ?? 0) < attempts).map(e => ({ ...e, attempts }));
+/**
+ * 받지 않은(더 좋은 기록이 이미 있는) 제출도 시도 수에는 들어간다. 이번 실행에서 본 제출(seen) 중 칸마다 가장 큰 시도 수를
+ * 그 칸의 기록들(entries)에 올린다. 이미 더 큰 값이 있으면 내리지 않는다. 바뀐 기록만 돌려준다.
+ */
+export function bumpAttempts(entries: BoardEntry[], seen: BoardEntry | BoardEntry[]): BoardEntry[] {
+  const max = new Map<string, number>();
+  for (const s of Array.isArray(seen) ? seen : [seen]) max.set(slotOf(s), Math.max(max.get(slotOf(s)) ?? 0, s.attempts ?? 0));
+  return entries.filter(e => (max.get(slotOf(e)) ?? 0) > (e.attempts ?? 0)).map(e => ({ ...e, attempts: max.get(slotOf(e))! }));
 }
 
 function sweep(repo: string): void {
@@ -385,8 +389,10 @@ function sweep(repo: string): void {
         git("reset", "--hard", "origin/main");
         const current = readEntries();
         const p = planWrite(verified, current);
-        // 받지 않은 제출도 시도 수에는 들어간다. 그 칸에 남은 기록의 시도 수를 올린다
-        const bumped = p.dropped.flatMap(x => bumpAttempts(current, x.a.entry));
+        // 받지 않은 제출도 시도 수에는 들어간다. 이번 실행에서 본 제출 중 칸마다 가장 큰 값을, 새로 쓰는 기록과 남아 있는 기록에 올린다
+        const seen = verified.map(x => x.a.entry);
+        for (const e of bumpAttempts(p.write.map(x => x.a.entry), seen)) p.write.find(x => x.a.id === e.id)!.a.entry.attempts = e.attempts;
+        const bumped = bumpAttempts(current, seen);
         if (p.write.length > 0 || bumped.length > 0) {
           writeAccepted(p.write.map(x => x.a), p.remove, bumped);
           git("add", "docs/submissions", "docs/leaderboard.json");

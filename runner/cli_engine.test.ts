@@ -99,6 +99,11 @@ test("답한 모델은 출력 토큰이 가장 많은 모델 ID 이고, 모양�
   assert.equal(answeringModel({ modelUsage: { "us.anthropic.claude-sonnet-5-5-v1:0": { outputTokens: 5 } } }), undefined);
   assert.equal(answeringModel({ modelUsage: { "claude-sonnet-5-5[1m]": { outputTokens: 5 } } }), undefined);
   assert.equal(answeringModel({}), undefined);
+  // 요청한 모델이 표에 있으면 보조 모델의 출력이 더 많아도 그것을 고른다
+  assert.equal(answeringModel({ modelUsage: { "claude-haiku-5-5": { outputTokens: 900 }, "claude-opus-5-5": { outputTokens: 5 } } }, "claude-opus-5-5"), "claude-opus-5-5");
+  assert.equal(answeringModel({ modelUsage: { "claude-opus-5-5-20261001": { outputTokens: 5 } } }, "claude-opus-5-5"), "claude-opus-5-5-20261001");
+  // 요청한 모델이 다른 표기로만 실려 있으면 보조 모델을 답한 모델로 적지 않는다
+  assert.equal(answeringModel({ modelUsage: { "claude-opus-5-5[1m]": { outputTokens: 900 }, "claude-haiku-5-5": { outputTokens: 20 } } }, "claude-opus-5-5"), undefined);
   assert.equal(answeringModel({ modelUsage: "x" as never }), undefined);
 });
 
@@ -106,4 +111,22 @@ test("환경변수로 준 시간 제한은 상한으로 자르고, 이상한 값
   assert.equal(timeoutMs("60000"), 60_000);
   assert.equal(timeoutMs("3000000000"), 30 * 60_000, "타이머 한도를 넘는 값이 1ms 로 바뀌지 않게");
   for (const bad of [undefined, "", "abc", "10", "-5"]) assert.equal(timeoutMs(bad), CLI_TIMEOUT_MS);
+});
+
+test("끊은 프로세스의 자식이 출력 파이프를 쥐고 있어도 기다리지 않고 다음 시도로 넘어간다", async () => {
+  // sh 가 띄운 sleep 이 stdout 을 물려받아 쥐고 있다. sh 만 끊겨도 close 는 sleep 이 끝나야 온다
+  const fake = fakeClaude("sleep 8 &\nwait");
+  const started = Date.now();
+  await assert.rejects(runClaude(["-p"], "hi", { command: fake.command, timeoutMs: 1000, log: () => {} }), /끝나지 않아 중단함/);
+  assert.ok(Date.now() - started < 7_000, `${Date.now() - started}ms`);
+});
+
+test("재시도까지 합친 시간 예산을 넘기지 않는다", async () => {
+  const fake = fakeClaude(HANG);
+  const logs: string[] = [];
+  const started = Date.now();
+  // 시도당 1초, 합계 1.5초: 두 번째 시도는 남은 시간만큼(최소 1초)만 쓰고, 예산을 넘겼으므로 세 번째는 없다
+  await assert.rejects(runClaude(["-p"], "hi", { command: fake.command, timeoutMs: 1000, budgetMs: 1500, log: m => logs.push(m) }), /끝나지 않아 중단함/);
+  assert.equal(logs.filter(l => l.includes("다시 시도")).length, 1);
+  assert.ok(Date.now() - started < 4_000);
 });

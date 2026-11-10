@@ -202,6 +202,8 @@ ranked · 2026-11-03-23cbb72d
 
 Development needs Node.js 24 or newer (it runs `.ts` files directly). The installed skill only needs 20 or newer.
 
+With the `claude` CLI backend each model call is cut off after 240 seconds and retried (up to 3 tries, 540 seconds in total), so one stuck call does not take the whole round with it. `ARENA_CLI_TIMEOUT_MS` changes the per-try limit (1 second to 30 minutes).
+
 ```bash
 npm ci
 npm test            # unit tests, no model calls

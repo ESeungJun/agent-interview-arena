@@ -7,7 +7,7 @@
 //   arena submit <session> [--unverified]   순위표 제출물을 만든다. --unverified: 응답 원문 없이 (미검증으로 오른다)
 //   arena status <session>    지금까지의 결과
 //   arena list                최근 면접 목록
-//   arena doctor              실행 환경 점검 (Node 버전, claude 로그인 수단, API 키 유무, gh). 모델은 부르지 않는다
+//   arena doctor              실행 환경 점검 (Node 버전, claude 명령 유무, API 키 유무, gh). 모델은 부르지 않아 claude 로그인 여부는 확인하지 못한다
 // 표준 출력에는 JSON 한 덩어리만 낸다(스킬이 읽는다). 진행 로그는 표준 오류와 live.jsonl(대기실 패널이 읽는다)로 보낸다.
 // 저장 위치: $ARENA_HOME 또는 ~/.agent-interview-arena
 import { spawnSync } from "node:child_process";
@@ -26,7 +26,7 @@ import { localLlm } from "./cli_engine.ts";
 import { fsExamStore } from "./fs_exam_store.ts";
 import {
   agentName, BODY_MARKER_END, BODY_MARKER_START, buildSubmission, canonicalSubmission, encodeSubmission, MAX_PAYLOAD_CHARS, MIN_MD_CHARS,
-  promptsHash, SUBMISSION_SCHEMA, verifySubmission,
+  promptsHash, submissionTooLarge, SUBMISSION_SCHEMA, verifySubmission,
 } from "./board.ts";
 import { MAX_REPEAT, repeatStats } from "./repeat.ts";
 import { summarizeStage, type StageSummary } from "./summary.ts";
@@ -150,7 +150,10 @@ function localProblems(s: SessionState, withEvidence = true): string[] {
   // 지문이 없는 세션은 어느 프롬프트 버전으로 채점했는지 알 수 없다 (이 기능 전에 시작한 세션)
   if (!s.promptsHash) return ["This interview was started by an older version of the skill. Re-run the interview to submit."];
   try {
-    const canon = canonicalSubmission(JSON.parse(JSON.stringify(buildSubmission(s, ARENA_VERSION, { withEvidence }))));
+    const built = buildSubmission(s, ARENA_VERSION, { withEvidence });
+    // 원문이 한도를 넘으면 원문 없이 낼 수 있는지로 본다 (제출할 때 --unverified 를 안내한다)
+    const sub = withEvidence && submissionTooLarge(built) ? buildSubmission(s, ARENA_VERSION, { withEvidence: false }) : built;
+    const canon = canonicalSubmission(JSON.parse(JSON.stringify(sub)));
     return canon ? verifySubmission(canon, [canon.promptsHash]) : ["The submission is not in the expected format"];
   } catch {
     // 옛 형식이거나 손상된 기록 하나 때문에 list 전체가 멈추지 않게 한다
@@ -160,6 +163,15 @@ function localProblems(s: SessionState, withEvidence = true): string[] {
 
 /** 면접을 시작한 뒤 스킬이 업데이트되어 면접관 프롬프트가 바뀌었는가 (이 기능 전에 시작한 세션은 알 수 없어 false) */
 const promptsChanged = (s: SessionState) => !!s.promptsHash && s.promptsHash !== promptsHash();
+
+function submitTier(s: SessionState): "self-reported" | "unverified" {
+  try {
+    const sub = buildSubmission(s, ARENA_VERSION);
+    return sub.schema === SUBMISSION_SCHEMA && !submissionTooLarge(sub) ? "self-reported" : "unverified";
+  } catch {
+    return "unverified";
+  }
+}
 
 function sessionOverview(s: SessionState, all: SessionState[] = loadAllStates()) {
   const next = nextChallenge(s.stages);
@@ -175,6 +187,8 @@ function sessionOverview(s: SessionState, all: SessionState[] = loadAllStates())
     // 끝난 랭크전 중 순위표 검사를 통과할 결과만 (검문소 실격 등은 봇이 받지 않는다). 못 내는 이유는 submitProblems 에
     submittable: submitProblems !== null && submitProblems.length === 0,
     submitProblems,
+    // 제출하면 오를 등급. 응답 원문이 Issue 한도를 넘으면 원문 없이(--unverified) 미검증으로만 낼 수 있다
+    submitTier: submitProblems !== null && submitProblems.length === 0 ? submitTier(s) : null,
     // 재면접 묶음의 합격률 (한 판만 봤고 --repeat 도 없으면 null)
     repeat,
     resultFile: statePath(s.session),
@@ -264,6 +278,12 @@ async function main(): Promise<void> {
       prev.group = group;
       saveState(prev);
     }
+    // 패널은 마지막 세션만 본다. 새 판도 새 면접처럼 기록을 새로 시작한다
+    try {
+      writeFileSync(LIVE, "");
+    } catch {
+      // 패널 연출용 기록이라 실패해도 면접은 계속한다
+    }
     const s: SessionState = {
       version: ARENA_VERSION, session: `${new Date().toISOString().slice(0, 10)}-${randomBytes(4).toString("hex")}`,
       agent: prev.agent, mdPath: prev.mdPath, mdHash: prev.mdHash, md: prev.md, createdAt: new Date().toISOString(),
@@ -303,12 +323,14 @@ async function main(): Promise<void> {
     }
     // --unverified: 응답 원문 없이 낸다. 순위표가 1·2차·최종을 대조하지 못하므로 "미검증"으로 오르고 순위는 맨 아래다
     const withEvidence = !values.unverified;
-    const problems = localProblems(s, withEvidence);
-    if (problems.length > 0) fail("not_verifiable", "순위표 검증을 통과하지 못하는 결과라 제출하지 않았습니다.", { problems });
     const stats = repeatStats(s, loadAllStates());
     const sub = buildSubmission(s, ARENA_VERSION, { withEvidence, ...(stats && stats.runs > 1 ? { repeat: { runs: stats.runs, passes: stats.passes } } : {}) });
+    // 크기를 먼저 본다: 한도를 넘는 제출은 형식 검사에서 "형식이 다르다"로만 나와 이유를 알 수 없다
+    const tooLarge = submissionTooLarge(sub);
+    const problems = tooLarge ? [] : localProblems(s, withEvidence);
+    if (problems.length > 0) fail("not_verifiable", "순위표 검증을 통과하지 못하는 결과라 제출하지 않았습니다.", { problems });
     const payload = encodeSubmission(sub);
-    if (payload.length > MAX_PAYLOAD_CHARS) {
+    if (tooLarge) {
       fail("too_large", sub.schema === SUBMISSION_SCHEMA
         ? "제출 데이터(명세 + 지원자 응답 원문)가 GitHub Issue 한도를 넘습니다. 응답 원문 없이 내려면 --unverified 를 붙이세요 (미검증으로 오릅니다)."
         : "제출 데이터가 GitHub Issue 한도를 넘습니다. 에이전트 문서를 줄여 주세요.");
