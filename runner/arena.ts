@@ -7,8 +7,10 @@
 //   arena submit <session> [--unverified]   순위표 제출물을 만든다. --unverified: 응답 원문 없이 (미검증으로 오른다)
 //   arena status <session>    지금까지의 결과
 //   arena list                최근 면접 목록
+//   arena doctor              실행 환경 점검 (Node 버전, claude 로그인 수단, API 키 유무, gh). 모델은 부르지 않는다
 // 표준 출력에는 JSON 한 덩어리만 낸다(스킬이 읽는다). 진행 로그는 표준 오류와 live.jsonl(대기실 패널이 읽는다)로 보낸다.
 // 저장 위치: $ARENA_HOME 또는 ~/.agent-interview-arena
+import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -349,12 +351,38 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "doctor") {
+    // 첫 실행이 몇 분짜리 모델 호출이라, 환경 문제는 그 전에 알 수 있게 한다. 값(키·토큰)은 읽지도 내지도 않고 있는지만 본다
+    const probe = (cmd: string, args: string[]) => {
+      const r = spawnSync(cmd, args, { encoding: "utf8", timeout: 15_000, stdio: ["ignore", "pipe", "pipe"] });
+      return { found: !r.error, ok: !r.error && r.status === 0, out: `${r.stdout ?? ""}`.trim().split("\n")[0].slice(0, 80) };
+    };
+    const claude = probe("claude", ["--version"]);
+    const gh = probe("gh", ["auth", "status"]);
+    const mods = claude.found && /Run a mod's tests/i.test(spawnSync("claude", ["plugin", "test", "--help"], { encoding: "utf8", timeout: 15_000 }).stdout ?? "");
+    const apiKey = !!process.env.ANTHROPIC_API_KEY;
+    const problems: string[] = [];
+    if (!apiKey && !claude.ok) problems.push("No model backend: install and sign in to the `claude` CLI, or set ANTHROPIC_API_KEY.");
+    out({
+      node: { version: process.versions.node, ok: nodeMajor >= MIN_NODE_MAJOR },
+      backend: apiKey ? "api" : claude.ok ? "cli" : null,
+      claude: { found: claude.found, version: claude.ok ? claude.out : null },
+      apiKey,
+      // 순위표 제출에만 쓴다. 없으면 제출할 때 브라우저로 Issue 를 연다
+      gh: { found: gh.found, signedIn: gh.ok },
+      // 대기실 패널(arena-room)을 쓸 수 있는 Claude Code 인가
+      mods,
+      home: HOME, ready: problems.length === 0, problems,
+    });
+    return;
+  }
+
   if (command === "version") {
     out({ version: ARENA_VERSION });
     return;
   }
 
-  fail("usage", "사용법: arena <start|next|again|status|list|submit|config|version> ...");
+  fail("usage", "사용법: arena <start|next|again|status|list|submit|config|doctor|version> ...");
 }
 
 main().catch(e => {

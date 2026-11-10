@@ -25719,6 +25719,7 @@ var init_sdk = __esm({
 });
 
 // runner/arena.ts
+import { spawnSync } from "node:child_process";
 import { randomBytes as randomBytes2 } from "node:crypto";
 import { appendFileSync, existsSync as existsSync2, mkdirSync as mkdirSync2, readdirSync, readFileSync as readFileSync2, statSync, writeFileSync as writeFileSync2 } from "node:fs";
 import { homedir } from "node:os";
@@ -28917,11 +28918,37 @@ async function main() {
     out({ lang: current.lang ?? null });
     return;
   }
+  if (command === "doctor") {
+    const probe = (cmd, args) => {
+      const r = spawnSync(cmd, args, { encoding: "utf8", timeout: 15e3, stdio: ["ignore", "pipe", "pipe"] });
+      return { found: !r.error, ok: !r.error && r.status === 0, out: `${r.stdout ?? ""}`.trim().split("\n")[0].slice(0, 80) };
+    };
+    const claude = probe("claude", ["--version"]);
+    const gh = probe("gh", ["auth", "status"]);
+    const mods = claude.found && /Run a mod's tests/i.test(spawnSync("claude", ["plugin", "test", "--help"], { encoding: "utf8", timeout: 15e3 }).stdout ?? "");
+    const apiKey = !!process.env.ANTHROPIC_API_KEY;
+    const problems = [];
+    if (!apiKey && !claude.ok) problems.push("No model backend: install and sign in to the `claude` CLI, or set ANTHROPIC_API_KEY.");
+    out({
+      node: { version: process.versions.node, ok: nodeMajor >= MIN_NODE_MAJOR },
+      backend: apiKey ? "api" : claude.ok ? "cli" : null,
+      claude: { found: claude.found, version: claude.ok ? claude.out : null },
+      apiKey,
+      // 순위표 제출에만 쓴다. 없으면 제출할 때 브라우저로 Issue 를 연다
+      gh: { found: gh.found, signedIn: gh.ok },
+      // 대기실 패널(arena-room)을 쓸 수 있는 Claude Code 인가
+      mods,
+      home: HOME,
+      ready: problems.length === 0,
+      problems
+    });
+    return;
+  }
   if (command === "version") {
     out({ version: ARENA_VERSION });
     return;
   }
-  fail("usage", "\uC0AC\uC6A9\uBC95: arena <start|next|again|status|list|submit|config|version> ...");
+  fail("usage", "\uC0AC\uC6A9\uBC95: arena <start|next|again|status|list|submit|config|doctor|version> ...");
 }
 main().catch((e) => {
   emit({ event: "error", message: String(e?.message ?? e) });

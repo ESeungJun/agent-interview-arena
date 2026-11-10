@@ -86,5 +86,7 @@ One verdict is one sample: the candidate's answers vary from run to run. `--repe
 
 ## Other commands
 
+- `doctor` in `$ARGUMENTS`, or when the first `start` fails with an `internal` error about `claude`: run `node ${CLAUDE_SKILL_DIR}/bin/arena.mjs doctor` and report `problems`, the `backend` it would use and whether `gh` is signed in (needed only to submit). It calls no model.
+
 - `submit` in `$ARGUMENTS`: follow [submit.md](submit.md).
 - `status <session>` / `list`: run the matching engine command and summarize it in a short table.
