@@ -1,0 +1,46 @@
+# 테스트·타입 검사·번들 일치 확인. 모델은 부르지 않는다 (테스트는 가짜 백엔드로 돈다).
+# 쓰기 권한과 비밀값이 필요 없다. 포크에서 온 풀 리퀘스트도 같은 검사를 받는다.
+name: ci
+
+on:
+  push:
+    branches: [main]
+    # 순위표 봇의 커밋(제출 기록)은 코드가 아니다
+    paths-ignore:
+      - "docs/submissions/**"
+      - "docs/leaderboard.json"
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # pretest 가 번들을 다시 빌드한다. 대기실 패널 테스트는 Claude Code 가 없어 건너뛰고, 순수 부분만 돈다
+      - name: Test
+        run: npm test
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # 소스만 고치고 번들을 안 올리면 설치된 스킬이 예전 엔진으로 돈다
+      - name: Bundle is up to date
+        run: git diff --exit-code -- plugins/arena/skills/apply/bin/arena.mjs

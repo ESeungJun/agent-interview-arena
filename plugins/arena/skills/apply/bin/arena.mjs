@@ -25725,82 +25725,6 @@ import { homedir } from "node:os";
 import { join as join5, resolve as resolve2 } from "node:path";
 import { parseArgs } from "node:util";
 
-// core/division.ts
-var DIVISIONS = ["light", "middle", "open"];
-var DEFAULT_DIVISION = "middle";
-var DIVISION_ENGINE = { light: "haiku", middle: "sonnet", open: "opus" };
-function specModel(md) {
-  const m = /^﻿?---\r?\n([\s\S]*?)\r?\n---\s*(\r?\n|$)/.exec(md);
-  if (!m) return null;
-  const line = /^model:[ \t]*(.*)$/m.exec(m[1]);
-  if (!line) return null;
-  const v = line[1].replace(/#.*$/, "").trim().replace(/^["']|["']$/g, "").trim().toLowerCase().replace(/[^a-z0-9._:-]/g, "").slice(0, 60);
-  return v || null;
-}
-function divisionOfModel(model) {
-  if (!model) return null;
-  if (model.includes("haiku")) return "light";
-  if (model.includes("sonnet")) return "middle";
-  if (model.includes("opus")) return "open";
-  return null;
-}
-function pickDivision(md, flag) {
-  const declared = specModel(md);
-  if (flag !== void 0) return { division: flag, source: "flag", specModel: declared };
-  const fromSpec = divisionOfModel(declared);
-  return fromSpec ? { division: fromSpec, source: "spec", specModel: declared } : { division: DEFAULT_DIVISION, source: "default", specModel: declared };
-}
-
-// core/exam.ts
-import { createHash, createHmac } from "node:crypto";
-function mulberry32(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = a + 1831565813 >>> 0;
-    let t = a;
-    t = Math.imul(t ^ t >>> 15, t | 1);
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-function quarterOf(date) {
-  const kst = new Date(date.getTime() + 9 * 36e5);
-  return `${kst.getUTCFullYear()}-Q${Math.floor(kst.getUTCMonth() / 3) + 1}`;
-}
-function normalizeMd(md) {
-  return md.replace(/\r\n?/g, "\n").split("\n").map((line) => line.replace(/[ \t]+/g, " ").trimEnd()).join("\n").replace(/\n{3,}/g, "\n\n").trim();
-}
-function mdHash(md) {
-  return createHash("sha256").update(normalizeMd(md)).digest("hex").slice(0, 16);
-}
-var LOCAL_EXAM_SECRET = "arena-local-dev-exam-secret";
-function variantSeedOf(quarter, attackId, secret = LOCAL_EXAM_SECRET) {
-  const mac = createHmac("sha256", secret).update(`variant:${quarter}:${attackId}`).digest("hex");
-  return parseInt(mac.slice(0, 8), 16);
-}
-function attackSeedOf(quarter, hash, secret = LOCAL_EXAM_SECRET) {
-  const mac = createHmac("sha256", secret).update(`${quarter}:${hash}`).digest("hex");
-  return parseInt(mac.slice(0, 8), 16);
-}
-async function openExam(md, opts) {
-  const quarter = quarterOf(opts.date ?? /* @__PURE__ */ new Date());
-  const hash = mdHash(md);
-  const record = !opts.fresh && await opts.store.load(quarter, hash) || { quarter, mdHash: hash };
-  return {
-    quarter,
-    attackSeed: attackSeedOf(quarter, hash, opts.secret),
-    variantSeed: (attackId) => variantSeedOf(quarter, attackId, opts.secret),
-    get: (key) => record[key],
-    set: async (key, value) => {
-      record[key] = value;
-      if (!opts.fresh) await opts.store.save(record);
-    }
-  };
-}
-
-// core/prompts.ts
-import { randomBytes } from "node:crypto";
-
 // core/assets.generated.ts
 var ASSETS = {
   "prompts/interviewer_doc_recheck.md": '# \u{1F4C4} Absence Re-check\n\n> Stage: only for candidates who failed document screening, one call\n> `shared/security_preamble.md` is prepended.\n\n<role>\nYou re-check document screening. You receive items that the previous interviewer marked down without a quote, saying "this is not in the document". Your job is to search the source from start to finish again and decide, for each item, whether it is **really absent**. The goal is not to justify the deduction; it is to find anything that was missed so the candidate does not fail unfairly.\n</role>\n\n<rules>\n- For each item, look for a sentence in the document that satisfies the item\'s definition. If it is worded differently but actually satisfies the definition, it counts as present.\n- If present, set `found: true` and copy that sentence **verbatim** into `evidence`. Do not summarize or rewrite it. The system compares it with the source character by character and ignores it if it does not match.\n- If the document touches a similar topic but does not satisfy the definition, it is `found: false`. Example: the item asks for "what to do on failure" and the document only says "be thorough" \u2014 absent.\n- If absent, set `found: false`, `evidence: null`, and write in `reason`, in one sentence, what you looked for and why you consider it absent.\n- Judge only the items you received. Do not add other items or mention scores.\n</rules>\n\n<output_format>\n```json\n{\n  "rechecks": [\n    { "id": "D5-2", "found": true, "evidence": "verbatim quote", "reason": "one sentence" }\n  ]\n}\n```\n</output_format>\n',
@@ -26232,8 +26156,83 @@ var ASSETS = {
   "schemas/round_item_vote.json": '{\n  "$schema": "https://json-schema.org/draft/2020-12/schema",\n  "title": "round_item_vote",\n  "type": "object",\n  "properties": {\n    "verdicts": {\n      "type": "array",\n      "items": {\n        "type": "object",\n        "properties": {\n          "target": {\n            "type": "string"\n          },\n          "id": {\n            "type": "string"\n          },\n          "result": {\n            "enum": [\n              "true",\n              "false",\n              "na"\n            ]\n          },\n          "evidence": {\n            "anyOf": [\n              {\n                "type": "string"\n              },\n              {\n                "type": "null"\n              }\n            ]\n          },\n          "reason": {\n            "type": "string"\n          }\n        },\n        "required": [\n          "target",\n          "id",\n          "result",\n          "evidence",\n          "reason"\n        ],\n        "additionalProperties": false\n      }\n    }\n  },\n  "required": [\n    "verdicts"\n  ],\n  "additionalProperties": false\n}\n',
   "schemas/security_screener.json": '{\n  "$schema": "https://json-schema.org/draft/2020-12/schema",\n  "title": "security_screener",\n  "type": "object",\n  "properties": {\n    "classification": {\n      "enum": [\n        "CLEAN",\n        "DEFENSIVE_QUOTE",\n        "EVAL_SYSTEM_ATTACK",\n        "AGENT_MISUSE"\n      ]\n    },\n    "evidence": {\n      "anyOf": [\n        {\n          "type": "string"\n        },\n        {\n          "type": "null"\n        }\n      ]\n    },\n    "target": {\n      "enum": [\n        "AGENT_USER",\n        "EVALUATOR",\n        "NONE"\n      ]\n    },\n    "reason": {\n      "type": "string"\n    }\n  },\n  "required": [\n    "classification",\n    "evidence",\n    "target",\n    "reason"\n  ],\n  "additionalProperties": false\n}\n'
 };
+var PACKAGE_VERSION = "0.1.0";
+
+// core/division.ts
+var DIVISIONS = ["light", "middle", "open"];
+var DEFAULT_DIVISION = "middle";
+var DIVISION_ENGINE = { light: "haiku", middle: "sonnet", open: "opus" };
+function specModel(md) {
+  const m = /^﻿?---\r?\n([\s\S]*?)\r?\n---\s*(\r?\n|$)/.exec(md);
+  if (!m) return null;
+  const line = /^model:[ \t]*(.*)$/m.exec(m[1]);
+  if (!line) return null;
+  const v = line[1].replace(/#.*$/, "").trim().replace(/^["']|["']$/g, "").trim().toLowerCase().replace(/[^a-z0-9._:-]/g, "").slice(0, 60);
+  return v || null;
+}
+function divisionOfModel(model) {
+  if (!model) return null;
+  if (model.includes("haiku")) return "light";
+  if (model.includes("sonnet")) return "middle";
+  if (model.includes("opus")) return "open";
+  return null;
+}
+function pickDivision(md, flag) {
+  const declared = specModel(md);
+  if (flag !== void 0) return { division: flag, source: "flag", specModel: declared };
+  const fromSpec = divisionOfModel(declared);
+  return fromSpec ? { division: fromSpec, source: "spec", specModel: declared } : { division: DEFAULT_DIVISION, source: "default", specModel: declared };
+}
+
+// core/exam.ts
+import { createHash, createHmac } from "node:crypto";
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = a + 1831565813 >>> 0;
+    let t = a;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function quarterOf(date) {
+  const kst = new Date(date.getTime() + 9 * 36e5);
+  return `${kst.getUTCFullYear()}-Q${Math.floor(kst.getUTCMonth() / 3) + 1}`;
+}
+function normalizeMd(md) {
+  return md.replace(/\r\n?/g, "\n").split("\n").map((line) => line.replace(/[ \t]+/g, " ").trimEnd()).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+function mdHash(md) {
+  return createHash("sha256").update(normalizeMd(md)).digest("hex").slice(0, 16);
+}
+var LOCAL_EXAM_SECRET = "arena-local-dev-exam-secret";
+function variantSeedOf(quarter, attackId, secret = LOCAL_EXAM_SECRET) {
+  const mac = createHmac("sha256", secret).update(`variant:${quarter}:${attackId}`).digest("hex");
+  return parseInt(mac.slice(0, 8), 16);
+}
+function attackSeedOf(quarter, hash, secret = LOCAL_EXAM_SECRET) {
+  const mac = createHmac("sha256", secret).update(`${quarter}:${hash}`).digest("hex");
+  return parseInt(mac.slice(0, 8), 16);
+}
+async function openExam(md, opts) {
+  const quarter = quarterOf(opts.date ?? /* @__PURE__ */ new Date());
+  const hash = mdHash(md);
+  const record = !opts.fresh && await opts.store.load(quarter, hash) || { quarter, mdHash: hash };
+  return {
+    quarter,
+    attackSeed: attackSeedOf(quarter, hash, opts.secret),
+    variantSeed: (attackId) => variantSeedOf(quarter, attackId, opts.secret),
+    get: (key) => record[key],
+    set: async (key, value) => {
+      record[key] = value;
+      if (!opts.fresh) await opts.store.save(record);
+    }
+  };
+}
 
 // core/prompts.ts
+import { randomBytes } from "node:crypto";
 function newNonce() {
   return randomBytes(8).toString("hex");
 }
@@ -28213,7 +28212,7 @@ function summarizeStage(stage, report, all) {
 
 // runner/arena.ts
 var BOARD_REPO = "ESeungJun/agent-interview-arena";
-var ARENA_VERSION = "0.1.0";
+var ARENA_VERSION = PACKAGE_VERSION;
 var HOME = process.env.ARENA_HOME ?? join5(homedir(), ".agent-interview-arena");
 var SESSIONS = join5(HOME, "sessions");
 var LIVE = join5(HOME, "live.jsonl");

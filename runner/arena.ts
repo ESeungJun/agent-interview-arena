@@ -11,6 +11,7 @@ import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statS
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { PACKAGE_VERSION } from "../core/assets.generated.ts";
 import { DIVISIONS, pickDivision, type DivisionSource } from "../core/division.ts";
 import { mdHash } from "../core/exam.ts";
 import { nextChallenge, runChallenge, type Challenge, type ChallengeReport, type StageResults } from "../core/interview.ts";
@@ -26,7 +27,8 @@ import { summarizeStage, type StageSummary } from "./summary.ts";
 
 const BOARD_REPO = "ESeungJun/agent-interview-arena";
 
-export const ARENA_VERSION = "0.1.0";
+/** 면접 기록과 순위표 제출물에 남는 엔진 버전. package.json 의 version 에서 생성된다 (runner/bundle_assets.ts) */
+export const ARENA_VERSION = PACKAGE_VERSION;
 const HOME = process.env.ARENA_HOME ?? join(homedir(), ".agent-interview-arena");
 const SESSIONS = join(HOME, "sessions");
 const LIVE = join(HOME, "live.jsonl");
