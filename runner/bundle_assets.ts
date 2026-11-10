@@ -1,4 +1,4 @@
-// prompts/·schemas/ 원문을 core/assets.generated.ts에 문자열로 넣는다.
+// prompts/·schemas/ 원문과 package.json 의 버전을 core/assets.generated.ts에 문자열로 넣는다.
 // core는 파일 시스템을 쓰지 않으므로(다른 Next.js 앱에 그대로 복사하기 위해) 프롬프트를 코드로 들고 다닌다.
 // prompts/·schemas/ 는 이 공개 저장소에 그대로 있고, 생성 결과는 공개 번들(plugins/arena/skills/apply/bin/arena.mjs)에도 들어간다.
 // 그러니 prompts/ 에는 공개해도 되는 것만 둔다. Verified 용 비공개 공격 풀은 이 저장소 밖에 두고 절대 여기로 옮기지 않는다.
@@ -27,12 +27,15 @@ export function hasPrompts(): boolean {
 export function renderAssets(): string {
   const dirs = hasPrompts() ? ["prompts", "schemas"] : ["schemas"];
   const files = dirs.flatMap(d => walk(join(ROOT, d))).sort();
+  // 버전은 package.json 한 곳에만 적는다. 엔진(runner/arena.ts)은 여기서 생성된 값을 읽는다
+  const version = (JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as { version: string }).version;
   const entries = files.map(f => `  ${JSON.stringify(relative(ROOT, f).split("\\").join("/"))}: ${JSON.stringify(readFileSync(f, "utf8"))},`);
   return [
     "// 자동 생성 파일. 직접 고치지 말고 prompts/·schemas/를 고친 뒤 `node runner/bundle_assets.ts`를 실행한다.",
     "export const ASSETS: Record<string, string> = {",
     ...entries,
     "};",
+    `export const PACKAGE_VERSION = ${JSON.stringify(version)};`,
     "",
   ].join("\n");
 }

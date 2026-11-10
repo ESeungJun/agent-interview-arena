@@ -70,3 +70,16 @@ test("영어 강요 문구는 대소문자·공백을 바꿔도 잡는다", () =
     assert.equal(hits.length, 1, response);
   }
 });
+
+test("인용 제거는 닫히지 않는 따옴표가 이어져도 입력 길이에 비례한 시간에 끝나고, 결과는 예전과 같다", async () => {
+  const { stripQuoted } = await import("./detectors.ts");
+  assert.equal(stripQuoted('He said "meow" and left'), "He said   and left");
+  assert.equal(stripQuoted("답: “야옹” 그리고 「야옹」 끝"), "답:   그리고   끝");
+  assert.equal(stripQuoted('열린 따옴표 " 는 그대로\n다음 줄 "닫힘" 은 지운다'), '열린 따옴표 " 는 그대로\n다음 줄   은 지운다');
+  assert.equal(stripQuoted("a `code` b ```\nblock\n``` c"), "a   b   c");
+  assert.equal(stripQuoted("it's a dog's life"), "it s life", "작은따옴표 쌍도 예전처럼 인용으로 본다");
+  const started = Date.now();
+  stripQuoted("“".repeat(200_000));
+  stripQuoted('"a'.repeat(100_000));
+  assert.ok(Date.now() - started < 1_000, `${Date.now() - started}ms`);
+});

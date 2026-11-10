@@ -30,3 +30,30 @@ test("빈 명세는 모델을 부르기 전에 거절한다", () => {
   }
   assert.equal(JSON.parse(out).error, "too_short");
 });
+
+test("doctor 는 모델을 부르지 않고 환경을 점검하며, 비밀값을 내지 않는다", () => {
+  const home = mkdtempSync(join(tmpdir(), "arena-"));
+  const env = { ...process.env, ARENA_HOME: home, ANTHROPIC_API_KEY: "sk-ant-test-not-a-real-key" };
+  const raw = execFileSync(process.execPath, [BUNDLE, "doctor"], { env, encoding: "utf8", timeout: 60_000 });
+  const d = JSON.parse(raw);
+  assert.equal(d.node.ok, true);
+  assert.equal(d.apiKey, true);
+  assert.equal(d.backend, "api");
+  assert.equal(d.ready, true);
+  assert.equal(typeof d.gh.signedIn, "boolean");
+  assert.equal(typeof d.mods, "boolean");
+  assert.ok(!raw.includes("sk-ant-test"), "키 값은 출력에 없어야 한다");
+});
+
+test("없는 세션으로 again·submit 을 부르면 JSON 오류로 답한다", () => {
+  const env = { ...process.env, ARENA_HOME: mkdtempSync(join(tmpdir(), "arena-")) };
+  for (const cmd of ["again", "submit"]) {
+    let out = "";
+    try {
+      execFileSync(process.execPath, [BUNDLE, cmd, "2026-11-10-deadbeef"], { env, encoding: "utf8", timeout: 10_000 });
+    } catch (e) {
+      out = (e as { stdout: string }).stdout;
+    }
+    assert.equal(JSON.parse(out).error, "no_session");
+  }
+});

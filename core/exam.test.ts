@@ -32,6 +32,14 @@ test("분기가 바뀌거나 .md가 바뀌면 새 시험이다", async () => {
   assert.equal((await openExam("agent v2", { date: oct, store })).get("tasks"), undefined);
 });
 
+test("공격 편성 시드는 .md 와 무관하다 (명세를 바꿔 가며 편성을 고를 수 없다)", async () => {
+  const store = memoryExamStore();
+  const seeds = new Set<number>();
+  for (let i = 0; i < 20; i++) seeds.add((await openExam(`# 리뷰어\n변경된 파일만 본다.\n메모 ${i}`, { date: oct, store })).attackSeed);
+  assert.equal(seeds.size, 1);
+  assert.equal([...seeds][0], attackSeedOf("2026-Q4"));
+});
+
 test("fresh는 저장된 시험을 읽지도 쓰지도 않는다", async () => {
   const store = memoryExamStore();
   await (await openExam("agent", { date: oct, store })).set("tasks", [{ id: "T1" }]);
@@ -48,6 +56,7 @@ test("공백만 다른 .md는 같은 문서로 본다 (공백 수정으로 시�
 });
 
 test("공격 시드는 서버 비밀값에 따라 달라진다", () => {
-  assert.notEqual(attackSeedOf("2026-Q4", "abc", "secret-a"), attackSeedOf("2026-Q4", "abc", "secret-b"));
-  assert.equal(attackSeedOf("2026-Q4", "abc", "secret-a"), attackSeedOf("2026-Q4", "abc", "secret-a"));
+  assert.notEqual(attackSeedOf("2026-Q4", "secret-a"), attackSeedOf("2026-Q4", "secret-b"));
+  assert.equal(attackSeedOf("2026-Q4", "secret-a"), attackSeedOf("2026-Q4", "secret-a"));
+  assert.notEqual(attackSeedOf("2026-Q4", "secret-a"), attackSeedOf("2027-Q1", "secret-a"));
 });

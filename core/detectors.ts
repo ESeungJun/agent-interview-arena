@@ -114,12 +114,43 @@ export function runAttackDetectors(opts: {
   return hits;
 }
 
-/** 따옴표·코드로 감싼 인용 구간을 지운다. */
+const QUOTE_PAIRS: Record<string, string> = { '"': '"', "“": "”", "'": "'", "‘": "’", "「": "」", "『": "』" };
+const CODE_SPAN: Record<string, string> = { "`": "`" };
+
+/** 한 줄에서 pairs 의 여는 문자부터 닫는 문자까지를 공백 하나로 바꾼다. 왼쪽부터 한 번 훑는다 */
+function stripPairs(line: string, pairs: Record<string, string>): string {
+  let out = "";
+  // 이 줄에서 그 닫는 문자가 더는 없다고 확인된 종류. 다시 찾지 않는다 (그래서 입력 길이에 비례한 시간에 끝난다)
+  const none = new Set<string>();
+  for (let i = 0; i < line.length; i++) {
+    const close = pairs[line[i]];
+    if (close === undefined || none.has(close)) {
+      out += line[i];
+      continue;
+    }
+    const end = line.indexOf(close, i + 1);
+    if (end < 0) {
+      none.add(close);
+      out += line[i];
+      continue;
+    }
+    out += " ";
+    i = end;
+  }
+  return out;
+}
+
+/**
+ * 따옴표·코드로 감싼 인용 구간을 지운다: 코드 블록 → 한 줄 코드 → 따옴표 순서다. 인용은 한 줄 안에서만 닫힌다.
+ * 닫히지 않는 여는 따옴표가 수만 개 이어져도 입력 길이에 비례한 시간만 쓴다
+ * (정규식 대안 나열은 그런 입력에서 제곱으로 느려졌고, 순위표 검증이 제출자가 준 응답에 이 함수를 돌린다).
+ */
 export function stripQuoted(text: string): string {
   return text
     .replace(/```[\s\S]*?```/g, " ")
-    .replace(/`[^`\n]*`/g, " ")
-    .replace(/"[^"\n]*"|“[^”\n]*”|'[^'\n]*'|‘[^’\n]*’|「[^」\n]*」|『[^』\n]*』/g, " ");
+    .split("\n")
+    .map(line => stripPairs(stripPairs(line, CODE_SPAN), QUOTE_PAIRS))
+    .join("\n");
 }
 
 /** source에서 연속 n어절이 target에 그대로 나오는 구간 수 (겹치는 구간은 한 번만 센다). */
@@ -139,9 +170,15 @@ export function withoutOutputFormat(md: string): string {
 function copiedSpans(source: string, target: string, n: number): number {
   const words = source.split(/\s+/).filter(Boolean);
   const norm = target.replace(/\s+/g, " ");
+  // 먼저 거르기: 구간의 안쪽 어절(양 끝 제외)이 target 에 어절 단위로 나란히 있어야 일치할 수 있다.
+  // 없으면 긴 문자열 검색을 하지 않는다 (명세 어절 수 × 응답 길이만큼 훑지 않게)
+  const inner = n - 2;
+  const targetWords = norm.split(" ").filter(Boolean);
+  const grams = new Set<string>();
+  for (let i = 0; i + inner <= targetWords.length; i++) grams.add(targetWords.slice(i, i + inner).join(" "));
   let count = 0;
   for (let i = 0; i + n <= words.length; ) {
-    if (norm.includes(words.slice(i, i + n).join(" "))) {
+    if (grams.has(words.slice(i + 1, i + 1 + inner).join(" ")) && norm.includes(words.slice(i, i + n).join(" "))) {
       count++;
       i += n;
     } else i++;

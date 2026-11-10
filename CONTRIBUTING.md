@@ -45,14 +45,17 @@ npm test          # builds the bundle first, then runs every test without model 
 npm run typecheck
 ```
 
+- CI (`.github/workflows/ci.yml`) runs the same three steps on every push to `main` and every pull request, and fails when the committed bundle differs from a fresh build.
+- `npm test` also runs the waiting-room pane tests (`plugins/arena-room/tests/`) through `claude plugin test` when a Claude Code build with mods is installed, and skips them otherwise (CI has no Claude Code). The pane's pure part is always tested by `runner/room.test.ts`.
+
 - `npm test` rebuilds `plugins/arena/skills/apply/bin/arena.mjs`. Commit the rebuilt bundle together with the source change, or the installed skill runs old code.
 - If you changed anything in `prompts/` or `schemas/`, the prompt hash changes and the board stops accepting results made with the previous version. Say so in the pull request.
   - To keep accepting the previous version (a wording fix that does not change grading, for example), add its hash to `leaderboard/accepted_prompts.json` in the same pull request.
 
 ## Releases
 
-- The version lives in three places: `package.json`, `plugins/arena/.claude-plugin/plugin.json` and `ARENA_VERSION` in `runner/arena.ts`. Bump all three and rebuild the bundle.
-  - `ARENA_VERSION` is recorded as the engine version in interview records and leaderboard submissions.
+- The version lives in two places: `package.json` and `plugins/arena/.claude-plugin/plugin.json`. Bump both and rebuild the bundle. A test fails when they differ.
+  - The engine's `ARENA_VERSION` is generated from `package.json` (`runner/bundle_assets.ts`) and is recorded as the engine version in interview records and leaderboard submissions.
   - The waiting-room pane (`plugins/arena-room/.claude-plugin/plugin.json`) has its own version. Bump it only when the pane changes.
 - Tag the merge commit on `main` as `vX.Y.Z` and push the tag.
 

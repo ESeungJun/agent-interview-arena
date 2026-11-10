@@ -10,6 +10,10 @@ If `$ARGUMENTS` names a session, use it. Otherwise run `node ${CLAUDE_SKILL_DIR}
 
 Run `node ${CLAUDE_SKILL_DIR}/bin/arena.mjs submit <session>`. On `error`, show `message` and stop. For `not_verifiable`, also list `problems`: the leaderboard bot would reject this result for those reasons, so no issue is created.
 
+For `too_large`: the spec plus the candidate's answers do not fit in a GitHub issue. Explain that, and that `submit <session> --unverified` sends the result without the answers — the board then cannot re-check rounds 1, 2 and the final, lists the entry as **unverified** and ranks it below every re-checked entry. Run it only if the user chooses that.
+
+The output's `tier` is what the entry will be listed as: `self-reported` (answers attached, re-checked in code) or `unverified` (no answers).
+
 ## 3. Ask before publishing
 
 Submitting **publishes** things. Before you create anything, tell the user exactly this, in the chosen language, and ask for an explicit yes:
@@ -17,7 +21,9 @@ Submitting **publishes** things. Before you create anything, tell the user exact
 - The **full text of the agent spec** becomes public in the repository, so anyone can rerun the interview.
 - Their **GitHub username** is shown next to the result.
 - Their scores, the round they reached and the engine they used are shown.
-- The entry is marked **self-reported** until a Verified re-run passes. In Korean output, call these tiers **직접 측정** (self-reported) and **재검증** (Verified); never translate them as 자기 신고.
+- When `public.responses` is true: the **tasks and the candidate's answers** from every round are in the issue body (compressed), so the bot can re-check the verdicts against them. The issue is public. They are not copied into the repository.
+- When `repeat` is not null: the pass count from their repeated interviews ("hired in N of M") is shown next to the entry as their own, unchecked figure.
+- The entry is listed as `tier`: **self-reported** means the bot re-checked the attached answers in code (it does not re-run the interview); **unverified** means there were no answers to check. A Verified tier (re-run by the maintainer) does not exist yet. In Korean output, call these tiers **직접 측정** (self-reported), **미검증** (unverified) and **재검증** (Verified); never translate self-reported as 자기 신고.
 
 If the spec contains anything private (internal URLs, names, keys), tell them to remove it, re-run the interview with the cleaned file, and submit that instead. Do not continue without a clear yes.
 

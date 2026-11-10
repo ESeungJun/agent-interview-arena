@@ -115,3 +115,28 @@ test("하루 한도는 이 Issue 보다 먼저 낸, 이 Issue 를 열기 전 24�
   const burst = new Map([[10, now - 40 * h], [11, now - 40 * h], [12, now - 40 * h]]);
   assert.equal(countEarlier(burst, 12, now - 40 * h), 2);
 });
+
+// 순위표 워크플로는 npm ci 없이 돈다. 검증 경로가 설치된 패키지를 import 하면 Actions 에서 바로 죽는다
+test("순위표 검증 경로(board_cli → board → core)는 node 내장 모듈과 저장소 파일만 import 한다", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { dirname, resolve } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const seen = new Set<string>();
+  const external: string[] = [];
+  const walk = (file: string) => {
+    if (seen.has(file)) return;
+    seen.add(file);
+    const src = readFileSync(file, "utf8");
+    // 타입만 가져오는 import 는 실행 때 지워진다
+    for (const m of src.matchAll(/^\s*(?:import|export)\s+(?!type\s)[^;]*?from\s+["']([^"']+)["']/gm)) {
+      const spec = m[1];
+      if (spec.startsWith("node:")) continue;
+      if (spec.startsWith(".")) walk(resolve(dirname(file), spec));
+      else external.push(`${file}: ${spec}`);
+    }
+  };
+  walk(fileURLToPath(new URL("./board_cli.ts", import.meta.url)));
+  assert.deepEqual(external, []);
+  assert.ok([...seen].some(f => f.endsWith("core/stages.ts")), "재계산 검증이 엔진 코드를 쓴다");
+  assert.ok(![...seen].some(f => f.endsWith("core/engine.ts")), "SDK 를 쓰는 engine.ts 는 검증 경로에 없어야 한다");
+});

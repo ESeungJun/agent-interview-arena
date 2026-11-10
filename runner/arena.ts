@@ -1,16 +1,22 @@
 // 스킬이 부르는 면접 CLI. 한 번에 한 단계씩 돌려 스킬이 단계 사이에 장면을 보여 줄 수 있게 한다.
 //   arena start <agent.md> [--lang ko|en] [--mode ranked|quick] [--target claude|gpt|gpt-reasoning|gemini|generic] [--division light|middle|open]
 //                            체급을 주지 않으면 명세 frontmatter 의 model: 로 정하고, 없으면 middle(Sonnet)
+//                            --repeat N: 같은 시험을 N 판 볼 계획임을 기록한다 (판마다 arena again 으로 이어 본다)
 //   arena next <session>      다음 단계 하나를 본다
+//   arena again <session>     같은 명세·같은 시험으로 한 판 더 본다 (합격률을 재는 재면접). 서류전형까지 돌린다
+//   arena submit <session> [--unverified]   순위표 제출물을 만든다. --unverified: 응답 원문 없이 (미검증으로 오른다)
 //   arena status <session>    지금까지의 결과
 //   arena list                최근 면접 목록
+//   arena doctor              실행 환경 점검 (Node 버전, claude 명령 유무, API 키 유무, gh). 모델은 부르지 않아 claude 로그인 여부는 확인하지 못한다
 // 표준 출력에는 JSON 한 덩어리만 낸다(스킬이 읽는다). 진행 로그는 표준 오류와 live.jsonl(대기실 패널이 읽는다)로 보낸다.
 // 저장 위치: $ARENA_HOME 또는 ~/.agent-interview-arena
+import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { PACKAGE_VERSION } from "../core/assets.generated.ts";
 import { DIVISIONS, pickDivision, type DivisionSource } from "../core/division.ts";
 import { mdHash } from "../core/exam.ts";
 import { nextChallenge, runChallenge, type Challenge, type ChallengeReport, type StageResults } from "../core/interview.ts";
@@ -20,13 +26,15 @@ import { localLlm } from "./cli_engine.ts";
 import { fsExamStore } from "./fs_exam_store.ts";
 import {
   agentName, BODY_MARKER_END, BODY_MARKER_START, buildSubmission, canonicalSubmission, encodeSubmission, MAX_PAYLOAD_CHARS, MIN_MD_CHARS,
-  promptsHash, verifySubmission,
+  promptsHash, submissionTooLarge, SUBMISSION_SCHEMA, verifySubmission,
 } from "./board.ts";
+import { MAX_REPEAT, repeatStats } from "./repeat.ts";
 import { summarizeStage, type StageSummary } from "./summary.ts";
 
 const BOARD_REPO = "ESeungJun/agent-interview-arena";
 
-export const ARENA_VERSION = "0.1.0";
+/** 면접 기록과 순위표 제출물에 남는 엔진 버전. package.json 의 version 에서 생성된다 (runner/bundle_assets.ts) */
+export const ARENA_VERSION = PACKAGE_VERSION;
 const HOME = process.env.ARENA_HOME ?? join(homedir(), ".agent-interview-arena");
 const SESSIONS = join(HOME, "sessions");
 const LIVE = join(HOME, "live.jsonl");
@@ -41,7 +49,26 @@ export type SessionState = {
   divisionSource?: DivisionSource; specModel?: string | null;
   /** 면접을 시작할 때의 면접관 프롬프트 지문. 이 기능 전에 시작한 세션에는 없다 */
   promptsHash?: string;
+  /** 재면접 묶음: 같은 명세로 같은 시험을 여러 판 본 세션들이 공유하는 ID (첫 판의 세션 ID). 한 판만 봤으면 없다 */
+  group?: string;
+  /** 이 묶음에서 보려는 판 수 (--repeat N). 없으면 정해 두지 않은 것 */
+  repeatTarget?: number;
 };
+
+function loadAllStates(): SessionState[] {
+  if (!existsSync(SESSIONS)) return [];
+  return readdirSync(SESSIONS).filter(d => existsSync(statePath(d))).flatMap(d => {
+    try {
+      const s = JSON.parse(readFileSync(statePath(d), "utf8")) as SessionState;
+      // 모양이 틀린 기록(다른 프로그램이 쓴 파일, 쓰다 만 파일)은 건너뛴다
+      const ok = !!s && typeof s === "object" && typeof s.session === "string" && typeof s.createdAt === "string"
+        && !!s.options && typeof s.options === "object" && !!s.stages && typeof s.stages === "object" && Array.isArray(s.reports);
+      return ok ? [s] : [];
+    } catch {
+      return []; // 손상된 기록 하나 때문에 전체가 멈추지 않게 한다
+    }
+  });
+}
 
 function out(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
@@ -96,7 +123,8 @@ async function runStage(s: SessionState, challenge: Challenge): Promise<StageSum
   const report = await runChallenge({
     md: s.md, llm: localLlm(), examStore: fsExamStore(join(HOME, "exams")),
     target: s.options.target, division: s.options.division, interviewer: "haiku", generator: "sonnet",
-    screenAll: false, outputLanguage: s.options.lang, quick: s.options.mode === "quick",
+    // 랭크전은 순위표에 오를 수 있으므로 정규식에 안 걸린 명세도 분류 모델이 전수로 본다 (연습은 10% 표본)
+    screenAll: s.options.mode === "ranked", outputLanguage: s.options.lang, quick: s.options.mode === "quick",
     log: msg => {
       process.stderr.write(`${msg}\n`);
       emit({ event: "log", session: s.session, stage: challenge, message: msg });
@@ -118,11 +146,14 @@ async function runStage(s: SessionState, challenge: Challenge): Promise<StageSum
  * 순위표 봇과 같은 검사를 로컬에서 돌린 결과. 걸릴 결과면 submittable 을 끄고 submit 도 Issue 를 만들기 전에 멈춘다.
  * 프롬프트 버전은 봇이 받는 목록을 여기서 알 수 없으므로 봇에 맡긴다 (그래서 이 세션의 지문을 그대로 넘긴다).
  */
-function localProblems(s: SessionState): string[] {
+function localProblems(s: SessionState, withEvidence = true): string[] {
   // 지문이 없는 세션은 어느 프롬프트 버전으로 채점했는지 알 수 없다 (이 기능 전에 시작한 세션)
   if (!s.promptsHash) return ["This interview was started by an older version of the skill. Re-run the interview to submit."];
   try {
-    const canon = canonicalSubmission(JSON.parse(JSON.stringify(buildSubmission(s, ARENA_VERSION))));
+    const built = buildSubmission(s, ARENA_VERSION, { withEvidence });
+    // 원문이 한도를 넘으면 원문 없이 낼 수 있는지로 본다 (제출할 때 --unverified 를 안내한다)
+    const sub = withEvidence && submissionTooLarge(built) ? buildSubmission(s, ARENA_VERSION, { withEvidence: false }) : built;
+    const canon = canonicalSubmission(JSON.parse(JSON.stringify(sub)));
     return canon ? verifySubmission(canon, [canon.promptsHash]) : ["The submission is not in the expected format"];
   } catch {
     // 옛 형식이거나 손상된 기록 하나 때문에 list 전체가 멈추지 않게 한다
@@ -133,8 +164,19 @@ function localProblems(s: SessionState): string[] {
 /** 면접을 시작한 뒤 스킬이 업데이트되어 면접관 프롬프트가 바뀌었는가 (이 기능 전에 시작한 세션은 알 수 없어 false) */
 const promptsChanged = (s: SessionState) => !!s.promptsHash && s.promptsHash !== promptsHash();
 
-function sessionOverview(s: SessionState) {
+function submitTier(s: SessionState): "self-reported" | "unverified" {
+  try {
+    const sub = buildSubmission(s, ARENA_VERSION);
+    return sub.schema === SUBMISSION_SCHEMA && !submissionTooLarge(sub) ? "self-reported" : "unverified";
+  } catch {
+    return "unverified";
+  }
+}
+
+function sessionOverview(s: SessionState, all: SessionState[] = loadAllStates()) {
   const next = nextChallenge(s.stages);
+  // 방금 저장한 이 세션의 상태가 목록의 것보다 새롭다
+  const repeat = repeatStats(s, [...all.filter(o => o.session !== s.session), s]);
   const submitProblems = next !== null || s.options.mode !== "ranked" ? null
     : promptsChanged(s) ? ["The skill was updated after this interview started; re-run the interview"] : localProblems(s);
   return {
@@ -145,11 +187,20 @@ function sessionOverview(s: SessionState) {
     // 끝난 랭크전 중 순위표 검사를 통과할 결과만 (검문소 실격 등은 봇이 받지 않는다). 못 내는 이유는 submitProblems 에
     submittable: submitProblems !== null && submitProblems.length === 0,
     submitProblems,
+    // 제출하면 오를 등급. 응답 원문이 Issue 한도를 넘으면 원문 없이(--unverified) 미검증으로만 낼 수 있다
+    submitTier: submitProblems !== null && submitProblems.length === 0 ? submitTier(s) : null,
+    // 재면접 묶음의 합격률 (한 판만 봤고 --repeat 도 없으면 null)
+    repeat,
     resultFile: statePath(s.session),
   };
 }
 
+/** 번들은 Node 20 문법으로 빌드한다. 더 낮은 버전에서는 알아보기 어려운 오류 대신 한 줄 JSON 으로 알린다 */
+const MIN_NODE_MAJOR = 20;
+
 async function main(): Promise<void> {
+  const nodeMajor = Number(process.versions.node.split(".")[0]);
+  if (nodeMajor < MIN_NODE_MAJOR) fail("old_node", `Node ${MIN_NODE_MAJOR} 이상이 필요합니다 (지금 ${process.versions.node}).`);
   const [command, ...rest] = process.argv.slice(2);
   const { values, positionals } = parseArgs({
     args: rest, allowPositionals: true,
@@ -158,6 +209,8 @@ async function main(): Promise<void> {
       mode: { type: "string", default: "ranked" },
       target: { type: "string", default: "claude" },
       division: { type: "string" },
+      repeat: { type: "string" },
+      unverified: { type: "boolean", default: false },
     },
   });
 
@@ -170,11 +223,17 @@ async function main(): Promise<void> {
     if (!TARGETS.includes(values.target!)) fail("bad_target", `알 수 없는 target: ${values.target}`);
     if (values.division !== undefined && !(DIVISIONS as readonly string[]).includes(values.division)) fail("bad_division", `알 수 없는 division: ${values.division}`);
     const picked = pickDivision(md, values.division);
+    let repeatTarget: number | undefined;
+    if (values.repeat !== undefined) {
+      repeatTarget = Number(values.repeat);
+      if (!Number.isInteger(repeatTarget) || repeatTarget < 2 || repeatTarget > MAX_REPEAT) fail("bad_repeat", `--repeat 는 2 ~ ${MAX_REPEAT} 사이의 정수입니다: ${values.repeat}`);
+    }
     const s: SessionState = {
       version: ARENA_VERSION, session: `${new Date().toISOString().slice(0, 10)}-${randomBytes(4).toString("hex")}`,
       agent: agentName(path), mdPath: resolve(path), mdHash: mdHash(md), md, createdAt: new Date().toISOString(),
       options: { lang, mode, target: values.target!, division: picked.division }, stages: {}, reports: [],
       divisionSource: picked.source, specModel: picked.specModel, promptsHash: promptsHash(),
+      ...(repeatTarget ? { repeatTarget } : {}),
     };
     saveState(s);
     // 패널은 마지막 세션만 보므로 새 면접마다 기록을 새로 시작한다 (파일이 끝없이 커지지 않게)
@@ -206,6 +265,38 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "again") {
+    const prev = loadState(positionals[0] ?? "");
+    // 같은 시험을 다시 보는 것이라, 명세나 프롬프트가 바뀌었으면 묶을 수 없다
+    if (mdChanged(prev)) fail("md_changed", "면접을 본 뒤 에이전트 파일이 바뀌었습니다. 고친 파일로 새 면접을 시작하세요.", { session: prev.session });
+    if (promptsChanged(prev)) fail("prompts_changed", "면접을 본 뒤 스킬이 업데이트되어 면접관 프롬프트가 바뀌었습니다. 새 면접을 시작하세요.", { session: prev.session });
+    const group = prev.group ?? prev.session;
+    const members = loadAllStates().filter(o => (o.group ?? o.session) === group);
+    if (members.some(m => nextChallenge(m.stages) !== null)) fail("not_finished", "이 묶음에 아직 끝나지 않은 면접이 있습니다. 먼저 끝까지 보세요.", { session: prev.session });
+    if (members.length >= MAX_REPEAT) fail("repeat_limit", `한 묶음은 ${MAX_REPEAT}판까지입니다.`, { session: prev.session });
+    if (!prev.group) {
+      prev.group = group;
+      saveState(prev);
+    }
+    // 패널은 마지막 세션만 본다. 새 판도 새 면접처럼 기록을 새로 시작한다
+    try {
+      writeFileSync(LIVE, "");
+    } catch {
+      // 패널 연출용 기록이라 실패해도 면접은 계속한다
+    }
+    const s: SessionState = {
+      version: ARENA_VERSION, session: `${new Date().toISOString().slice(0, 10)}-${randomBytes(4).toString("hex")}`,
+      agent: prev.agent, mdPath: prev.mdPath, mdHash: prev.mdHash, md: prev.md, createdAt: new Date().toISOString(),
+      options: prev.options, stages: {}, reports: [],
+      divisionSource: prev.divisionSource, specModel: prev.specModel, promptsHash: prev.promptsHash,
+      group, ...(prev.repeatTarget ? { repeatTarget: prev.repeatTarget } : {}),
+    };
+    saveState(s);
+    const stage = await runStage(s, "doc");
+    out({ ...sessionOverview(s), stage });
+    return;
+  }
+
   if (command === "status") {
     const s = loadState(positionals[0] ?? "");
     out({ ...sessionOverview(s), stages: s.reports.map(r => summarizeStage(r.challenge, r, s.stages)) });
@@ -213,13 +304,9 @@ async function main(): Promise<void> {
   }
 
   if (command === "list") {
-    const items = existsSync(SESSIONS)
-      // 세션 ID 뒤쪽은 무작위라 이름순은 같은 날 안에서 순서가 섞인다. 시작 시각으로 최신순 정렬한다
-      ? readdirSync(SESSIONS).filter(d => existsSync(statePath(d)))
-        .map(d => JSON.parse(readFileSync(statePath(d), "utf8")) as SessionState)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 20)
-        .map(sessionOverview)
-      : [];
+    // 세션 ID 뒤쪽은 무작위라 이름순은 같은 날 안에서 순서가 섞인다. 시작 시각으로 최신순 정렬한다
+    const all = loadAllStates();
+    const items = [...all].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 20).map(x => sessionOverview(x, all));
     out({ sessions: items });
     return;
   }
@@ -234,17 +321,29 @@ async function main(): Promise<void> {
     if (promptsChanged(s)) {
       fail("prompts_changed", "면접을 본 뒤 스킬이 업데이트되어 면접관 프롬프트가 바뀌었습니다. 순위표는 지금 버전의 결과만 받으니 새로 면접을 보세요.");
     }
-    const problems = localProblems(s);
+    // --unverified: 응답 원문 없이 낸다. 순위표가 1·2차·최종을 대조하지 못하므로 "미검증"으로 오르고 순위는 맨 아래다
+    const withEvidence = !values.unverified;
+    const stats = repeatStats(s, loadAllStates());
+    const sub = buildSubmission(s, ARENA_VERSION, { withEvidence, ...(stats && stats.runs > 1 ? { repeat: { runs: stats.runs, passes: stats.passes } } : {}) });
+    // 크기를 먼저 본다: 한도를 넘는 제출은 형식 검사에서 "형식이 다르다"로만 나와 이유를 알 수 없다
+    const tooLarge = submissionTooLarge(sub);
+    const problems = tooLarge ? [] : localProblems(s, withEvidence);
     if (problems.length > 0) fail("not_verifiable", "순위표 검증을 통과하지 못하는 결과라 제출하지 않았습니다.", { problems });
-    const sub = buildSubmission(s, ARENA_VERSION);
     const payload = encodeSubmission(sub);
-    if (payload.length > MAX_PAYLOAD_CHARS) fail("too_large", "제출 데이터가 GitHub Issue 한도를 넘습니다. 에이전트 문서를 줄여 주세요.");
+    if (tooLarge) {
+      fail("too_large", sub.schema === SUBMISSION_SCHEMA
+        ? "제출 데이터(명세 + 지원자 응답 원문)가 GitHub Issue 한도를 넘습니다. 응답 원문 없이 내려면 --unverified 를 붙이세요 (미검증으로 오릅니다)."
+        : "제출 데이터가 GitHub Issue 한도를 넘습니다. 에이전트 문서를 줄여 주세요.");
+    }
+    const rechecked = sub.schema === SUBMISSION_SCHEMA;
     const scores = [sub.stages.doc?.score, sub.stages.r1?.score, sub.stages.r2?.score].filter(x => x !== undefined).join(" / ");
     const body = [
       `Agent **${sub.agent}** · division \`${sub.options.division}\` (${sub.run.engine}) · reached \`${sub.reached}\`${sub.hired ? " · 🏆 HIRED" : ""}`,
       `Scores: ${scores || "-"}`,
       "",
-      "This issue was generated by `arena submit`. The block below is the compressed submission (agent spec + verdicts). Do not edit it — the leaderboard bot verifies it as is.",
+      rechecked
+        ? "This issue was generated by `arena submit`. The block below is the compressed submission (agent spec, tasks, the candidate's answers and verdicts). Do not edit it — the leaderboard bot re-checks it as is."
+        : "This issue was generated by `arena submit`. The block below is the compressed submission (agent spec + verdicts, without the candidate's answers, so it is listed as unverified). Do not edit it — the leaderboard bot verifies it as is.",
       "",
       BODY_MARKER_START, "```", payload, "```", BODY_MARKER_END, "",
     ].join("\n");
@@ -253,7 +352,11 @@ async function main(): Promise<void> {
     out({
       session: s.session, repo: BOARD_REPO, title: `[arena-submission] ${sub.agent} (${sub.options.division})`, bodyFile,
       newIssueUrl: `https://github.com/${BOARD_REPO}/issues/new?template=1-arena-submission.md`,
-      public: { agentSpec: true, githubLogin: true, scores: true },
+      // responses: 과제와 지원자 응답 원문이 Issue 본문에 실린다 (저장소 사본에는 남기지 않는다)
+      public: { agentSpec: true, githubLogin: true, scores: true, responses: rechecked },
+      // 순위표에 오르는 등급. unverified 는 응답 원문이 없어 대조하지 못한 기록이다
+      tier: rechecked ? "self-reported" : "unverified",
+      repeat: sub.repeat ?? null,
       reached: sub.reached, hired: sub.hired,
     });
     return;
@@ -274,12 +377,38 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "doctor") {
+    // 첫 실행이 몇 분짜리 모델 호출이라, 환경 문제는 그 전에 알 수 있게 한다. 값(키·토큰)은 읽지도 내지도 않고 있는지만 본다
+    const probe = (cmd: string, args: string[]) => {
+      const r = spawnSync(cmd, args, { encoding: "utf8", timeout: 15_000, stdio: ["ignore", "pipe", "pipe"] });
+      return { found: !r.error, ok: !r.error && r.status === 0, out: `${r.stdout ?? ""}`.trim().split("\n")[0].slice(0, 80) };
+    };
+    const claude = probe("claude", ["--version"]);
+    const gh = probe("gh", ["auth", "status"]);
+    const mods = claude.found && /Run a mod's tests/i.test(spawnSync("claude", ["plugin", "test", "--help"], { encoding: "utf8", timeout: 15_000 }).stdout ?? "");
+    const apiKey = !!process.env.ANTHROPIC_API_KEY;
+    const problems: string[] = [];
+    if (!apiKey && !claude.ok) problems.push("No model backend: install and sign in to the `claude` CLI, or set ANTHROPIC_API_KEY.");
+    out({
+      node: { version: process.versions.node, ok: nodeMajor >= MIN_NODE_MAJOR },
+      backend: apiKey ? "api" : claude.ok ? "cli" : null,
+      claude: { found: claude.found, version: claude.ok ? claude.out : null },
+      apiKey,
+      // 순위표 제출에만 쓴다. 없으면 제출할 때 브라우저로 Issue 를 연다
+      gh: { found: gh.found, signedIn: gh.ok },
+      // 대기실 패널(arena-room)을 쓸 수 있는 Claude Code 인가
+      mods,
+      home: HOME, ready: problems.length === 0, problems,
+    });
+    return;
+  }
+
   if (command === "version") {
     out({ version: ARENA_VERSION });
     return;
   }
 
-  fail("usage", "사용법: arena <start|next|status|list|submit|config|version> ...");
+  fail("usage", "사용법: arena <start|next|again|status|list|submit|config|doctor|version> ...");
 }
 
 main().catch(e => {

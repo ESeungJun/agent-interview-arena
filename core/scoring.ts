@@ -79,11 +79,16 @@ export function normalizeQuote(s: string): string {
 }
 
 /** 인용이 원문에 있는가. 여러 조각을 쉼표나 말줄임표로 이어 인용했으면 조각마다 원문에 있어야 한다. */
+/** 조각 인용으로 인정하는 최대 조각 수. 정상 인용은 몇 조각이고, 상한이 없으면 조각 수 × 원문 길이만큼 검색한다 */
+const MAX_QUOTE_PARTS = 12;
+
 function quoteFound(evidence: string, haystack: string[]): boolean {
   const ev = normalizeQuote(evidence);
+  // 공백뿐인 근거는 근거가 아니다 (빈 문자열은 어느 원문에나 "들어 있다")
+  if (ev.length === 0) return false;
   if (haystack.some(h => h.includes(ev))) return true;
   const parts = ev.split(/\s*(?:\.\.\.|…|, )\s*/).filter(p => p.length >= 2);
-  return parts.length > 1 && parts.every(p => haystack.some(h => h.includes(p)));
+  return parts.length > 1 && parts.length <= MAX_QUOTE_PARTS && parts.every(p => haystack.some(h => h.includes(p)));
 }
 
 /** 인용한 근거가 원문에 실제로 있는지 검사. true 판정은 (부재형 항목이 아니면) 근거가 반드시 있어야 한다. */

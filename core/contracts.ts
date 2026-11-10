@@ -46,7 +46,7 @@ export function groundContracts(contracts: Contract[], md: string): { kept: Cont
         break;
       }
       case "language": {
-        const cue = LANGUAGE_CUE[value];
+        const cue = Object.hasOwn(LANGUAGE_CUE, value) ? LANGUAGE_CUE[value] : undefined;
         if (!cue || !cue.test(evidence)) { drop(c, "근거 문장에 언어 지정이 없다 (예시 문장의 언어로 추측한 약속)"); break; }
         kept.push(c);
         break;

@@ -47,6 +47,9 @@ npm test          # 번들을 먼저 빌드하고, 모델 호출 없이 모든 �
 npm run typecheck
 ```
 
+- CI(`.github/workflows/ci.yml`)가 `main` push와 풀 리퀘스트마다 같은 세 단계를 돌리고, 커밋된 번들이 새로 빌드한 것과 다르면 실패한다.
+- `npm test` 는 mods 를 지원하는 Claude Code 가 설치돼 있으면 대기실 패널 테스트(`plugins/arena-room/tests/`)도 `claude plugin test` 로 돌리고, 없으면 건너뛴다 (CI 에는 Claude Code 가 없다). 패널의 순수 부분은 `runner/room.test.ts` 가 항상 돌린다.
+
 - `npm test` 는 `plugins/arena/skills/apply/bin/arena.mjs` 를 다시 빌드한다.
   - 다시 빌드한 번들을 소스 변경과 함께 커밋한다.
   - 빠뜨리면 설치된 스킬이 예전 코드로 돈다.
@@ -56,8 +59,8 @@ npm run typecheck
 
 ## 릴리스
 
-- 버전은 `package.json`, `plugins/arena/.claude-plugin/plugin.json`, `runner/arena.ts` 의 `ARENA_VERSION` 세 곳에 있다. 셋 다 올리고 번들을 다시 빌드한다.
-  - `ARENA_VERSION` 은 면접 기록과 순위표 제출물에 엔진 버전으로 남는다.
+- 버전은 `package.json` 과 `plugins/arena/.claude-plugin/plugin.json` 두 곳에 있다. 둘 다 올리고 번들을 다시 빌드한다. 둘이 다르면 테스트가 실패한다.
+  - 엔진의 `ARENA_VERSION` 은 `package.json` 에서 생성되고(`runner/bundle_assets.ts`), 면접 기록과 순위표 제출물에 엔진 버전으로 남는다.
   - 대기실 패널(`plugins/arena-room/.claude-plugin/plugin.json`)은 따로 버전을 둔다. 패널을 고쳤을 때만 올린다.
 - `main` 의 합친 커밋에 `vX.Y.Z` 태그를 붙이고 태그를 push 한다.
 

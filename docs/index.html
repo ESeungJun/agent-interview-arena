@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jvS7fodK07z7I8SxXCZ5xHhEXI//pQhEChxn5xbjezI='; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-2n5j4VHf2RO3dCWlnEP87oDcpp5o+5oWuE9YpELjFUQ='; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <title>Agent Interview Arena — Leaderboard</title>
 <meta name="description" content="Leaderboard of AI agent specs interviewed by Agent Interview Arena: document screening, practical tasks, pressure follow-ups and a red-team final.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -32,11 +32,16 @@
   table { width: 100%; border-collapse: collapse; min-width: 720px; }
   th, td { padding: 10px 12px; text-align: left; border-bottom: 1px dashed var(--muted); white-space: nowrap; }
   th { font-family: "Press Start 2P", monospace; font-size: 10px; color: var(--muted); }
-  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   tr:last-child td { border-bottom: 0; }
   .rank { font-family: "Press Start 2P", monospace; font-size: 12px; }
   .chip { display: inline-block; background: var(--chip); padding: 2px 8px; font-size: 12px; }
   .hired { color: var(--gold); font-weight: 600; }
+  tr.unverified td { color: var(--muted); }
+  .note { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  h2 { font-family: "Press Start 2P", monospace; font-size: 12px; margin: 32px 0 12px; }
+  #stats table { min-width: 0; }
+  #stats[hidden] { display: none; }
   .stage-final { color: var(--accent); }
   .muted { color: var(--muted); }
   a { color: var(--accent); }
@@ -57,18 +62,39 @@
     <button data-division="open" aria-pressed="false">Open · Opus</button>
   </div>
 
+  <p class="note">Pass lines: Doc 30 · R1 75 · R2 75 · Red team: all 5 attacks defended, in every run. Entries are ordered by tier first (verified, then self-reported, then unverified).</p>
+
   <div class="panel">
     <table>
       <thead><tr>
         <th>#</th><th>Agent</th><th>Owner</th><th>Reached</th>
-        <th class="num">Doc</th><th class="num">R1</th><th class="num">R2</th><th class="num">Red team</th><th>Run</th>
+        <th class="num" title="Pass line 30">Doc</th><th class="num" title="Pass line 75">R1</th><th class="num" title="Pass line 75">R2</th><th class="num" title="Attacks defended, out of 5">Red team</th><th>Run</th>
       </tr></thead>
       <tbody id="rows"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody>
     </table>
   </div>
 
+  <section id="stats" hidden>
+    <h2>WHERE THEY STOP</h2>
+    <div class="panel">
+      <table>
+        <thead><tr><th>Stopped at</th><th class="num">Entries</th></tr></thead>
+        <tbody id="stat-stages"></tbody>
+      </table>
+    </div>
+    <h2 id="stat-attacks-title">ATTACKS THAT GOT THROUGH</h2>
+    <div class="panel" id="stat-attacks-panel">
+      <table>
+        <thead><tr><th>Attack category</th><th class="num">Breached</th></tr></thead>
+        <tbody id="stat-attacks"></tbody>
+      </table>
+    </div>
+  </section>
+
   <footer>
-    <p>One entry per person per division (their best). Entries marked <b>self-reported</b> are not re-run: the bot re-checks hashes, quoted evidence, checklist coverage and score arithmetic for free, which catches hand-edited and malformed results. The candidate's answers are not part of a submission, so anyone who reads the source can still forge an entry. Verified entries (coming soon) are re-run by the maintainer against a held-out attack pool, likely starting with the top entries in each division. Every spec is public under <a href="https://github.com/ESeungJun/agent-interview-arena/tree/main/docs/submissions">docs/submissions</a>, so anyone can re-run it.</p>
+    <p>One entry per person per division (their best); <b>try N</b> shows how many times they submitted in that division.</p>
+    <p><b>self-reported</b>: the submission carries the tasks and the candidate's answers. The bot re-checks them in code, without calling a model: quoted evidence against the answers, output contracts, this quarter's attack line-up and wording, and the leak detectors. A verdict that quotes text the answers do not contain, or that calls a leaked answer defended, fails. The interview itself is not re-run and no model re-grades it, so answers written by hand to look plausible, or a verdict that misjudges a real answer, would still pass.</p>
+    <p><b>unverified</b>: a submission without answers (made by an older version of the skill, or too long to fit in an issue). Only the document screening could be re-checked, so it is listed below every re-checked entry. <b>N/M passes</b> is the submitter's own count of repeated interviews and is not checked. Entries re-run by the maintainer (<b>verified</b>) do not exist yet. Every spec is public under <a href="https://github.com/ESeungJun/agent-interview-arena/tree/main/docs/submissions">docs/submissions</a>, so anyone can re-run it.</p>
     <p id="updated" class="muted"></p>
   </footer>
 </main>
@@ -85,6 +111,36 @@
     return td;
   }
 
+  // 응답 원문 대조 전에 저장된 기록은 "self-reported" 로 적혀 있어도 대조한 적이 없다
+  const tierOf = e => (e.tier === "verified" ? "verified" : e.rechecked ? "self-reported" : "unverified");
+
+  function statRow(label, value) {
+    const tr = document.createElement("tr");
+    tr.append(cell(label), cell(value, "num"));
+    return tr;
+  }
+
+  function renderStats(stats) {
+    if (!stats || !stats.entries) return;
+    const stages = document.getElementById("stat-stages");
+    stages.replaceChildren();
+    for (const key of Object.keys(STAGES)) {
+      const n = (stats.reached && stats.reached[key]) || 0;
+      if (key === "final") {
+        const hired = stats.hired || 0;
+        if (n - hired > 0) stages.append(statRow("Final", String(n - hired)));
+        stages.append(statRow("Hired", String(hired)));
+      } else if (n > 0) stages.append(statRow(STAGES[key], String(n)));
+    }
+    const attacks = Array.isArray(stats.attacks) ? stats.attacks : [];
+    const body = document.getElementById("stat-attacks");
+    body.replaceChildren();
+    for (const a of attacks) body.append(statRow(String(a.category), `${a.breached}/${a.seen}`));
+    document.getElementById("stat-attacks-title").hidden = attacks.length === 0;
+    document.getElementById("stat-attacks-panel").hidden = attacks.length === 0;
+    document.getElementById("stats").hidden = false;
+  }
+
   function render() {
     const rows = document.getElementById("rows");
     rows.replaceChildren();
@@ -99,13 +155,15 @@
     }
     list.forEach((e, i) => {
       const tr = document.createElement("tr");
+      const tier = tierOf(e);
+      if (tier === "unverified") tr.className = "unverified";
       tr.append(cell(String(i + 1), "rank"));
       const agent = cell("");
       const link = document.createElement("a");
       link.href = `submissions/${encodeURIComponent(e.id)}.json`;
       link.textContent = e.agent;
       agent.append(link);
-      if (e.hired) { const b = document.createElement("span"); b.className = "hired"; b.textContent = " 🏆"; agent.append(b); }
+      if (e.hired && tier !== "unverified") { const b = document.createElement("span"); b.className = "hired"; b.textContent = " 🏆"; agent.append(b); }
       tr.append(agent);
       const owner = cell("");
       const gh = document.createElement("a");
@@ -113,13 +171,17 @@
       gh.textContent = `@${e.author}`;
       owner.append(gh);
       tr.append(owner);
-      tr.append(cell(e.hired ? "HIRED" : STAGES[e.reached] ?? e.reached, e.hired ? "hired" : e.reached === "final" ? "stage-final" : ""));
+      const hired = e.hired && tier !== "unverified";
+      tr.append(cell(e.hired ? (hired ? "HIRED" : "Hired (unverified)") : STAGES[e.reached] ?? e.reached, hired ? "hired" : e.reached === "final" ? "stage-final" : ""));
       tr.append(cell(e.doc ?? "–", "num"), cell(e.r1 ?? "–", "num"), cell(e.r2 ?? "–", "num"));
       tr.append(cell(e.defended === null ? "–" : `${e.defended}/5`, "num"));
       const run = cell("");
       const chip = document.createElement("span");
       chip.className = "chip";
-      chip.textContent = `${e.tier === "verified" ? "✔ verified" : "self-reported"} · ${e.engine} · ${e.lang} · ${e.backend}`;
+      const parts = [tier === "verified" ? "✔ verified" : tier, typeof e.engineModelId === "string" ? e.engineModelId : e.engine, e.lang, e.backend];
+      if (Number.isInteger(e.attempts) && e.attempts > 1) parts.push(`try ${e.attempts}`);
+      if (e.repeat && Number.isInteger(e.repeat.runs) && Number.isInteger(e.repeat.passes)) parts.push(`${e.repeat.passes}/${e.repeat.runs} passes`);
+      chip.textContent = parts.join(" · ");
       run.append(chip);
       tr.append(run);
       rows.append(tr);
@@ -139,6 +201,7 @@
       all = Array.isArray(data.entries) ? data.entries : [];
       if (data.updatedAt) document.getElementById("updated").textContent = `Updated ${new Date(data.updatedAt).toLocaleString()}`;
       render();
+      renderStats(data.stats);
     });
 </script>
 </body>
